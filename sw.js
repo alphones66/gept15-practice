@@ -1,15 +1,15 @@
-const CACHE = 'gept15-practice-v1';
+const CACHE = 'gept15-practice-v2';
 const FILES = [
   './',
   'index.html',
-  'gept15-manifest.json',
+  'gept15-manifest-v2.json',
   'gept-elementary.js',
   'gept-examples.js',
   'gept-emoji.js',
   'gept-order.js',
-  'app-icon-180.png',
-  'app-icon-192.png',
-  'app-icon-512.png'
+  'gept15-icon-180.png',
+  'gept15-icon-192.png',
+  'gept15-icon-512.png'
 ];
 
 self.addEventListener('install', event => {
