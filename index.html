@@ -78,7 +78,8 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 .ver { font-size:12px; font-weight:normal; color:#6b4a30; background:rgba(255,255,255,.65); border-radius:8px; padding:2px 7px; margin-left:6px; white-space:nowrap; }
 .who { font-size:15px; color:#8a6a50; margin:6px 0 2px; }
 .pic { font-size:38px; line-height:1.35; margin:4px 0 6px; letter-spacing:4px; }
-.pic small { font-size:22px; letter-spacing:0; margin:0 6px; opacity:.7; }
+.pic .sm { font-size:22px; letter-spacing:0; margin:0 6px; opacity:.7; }
+.say.sm { font-size:15px; padding:4px 11px; margin:0 0 0 8px; vertical-align:middle; }
 .ex + .ex { margin-top:8px; }
 .sline { display:flex; flex-wrap:wrap; gap:8px; min-height:58px; padding:10px; border:2px dashed #f1d9bf; border-radius:14px; margin:10px 0; align-content:flex-start; }
 .stile { border:2px solid var(--orange); background:#fff; border-radius:12px; padding:8px 12px; font-size:20px; }
@@ -101,7 +102,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="gept-order.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.23-6';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.23-7';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -267,9 +268,9 @@ function card() {
       <div><span class="pos">${esc(x.pos)}</span>${inBook(x.w) ? ' <span class="pos" style="background:#e3f2fd;color:#1565c0">📘 課本有出現</span>' : ''}</div>
       <div class="zh">${esc(x.zh)}</div>
       <button class="say" data-full="${esc(x.w)}">🔊 聽發音和意思</button>
-      ${ex ? `<div class="ex"><div class="pic">${sentEmoji(ex[0])}</div><div class="who">${personOf(x.w).icon} ${esc(personOf(x.w).name)} 說：</div>${esc(ex[0])}<small>${esc(ex[1])}</small><button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exfull="${esc(x.w)}">🔊 聽例句＋中文</button></div>
-      <div class="ex"><div class="pic">${dialogPic(x.w)}</div><div class="who">問　${personOf(x.w).icon} ${esc(personOf(x.w).name)}</div>${esc(ex[2])}<small>${esc(ex[3])}</small>
-        <div class="who">答　${answererOf(x.w).icon} ${esc(answererOf(x.w).name)}</div>${esc(ex[4])}<small>${esc(ex[5])}</small>
+      ${ex ? `<div class="ex"><div class="pic">${sentEmoji(ex[0])}</div><div class="who">${personOf(x.w).icon} ${esc(personOf(x.w).name)} 說：</div>${esc(ex[0])}<button class="say sm" data-exline="e:${esc(x.w)}" aria-label="聽這句">🔊</button><small>${esc(ex[1])}</small><button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exfull="${esc(x.w)}">🔊 聽例句＋中文</button></div>
+      <div class="ex"><div class="pic">${dialogPic(x.w)}</div><div class="who">問　${personOf(x.w).icon} ${esc(personOf(x.w).name)}</div>${esc(ex[2])}<button class="say sm" data-exline="q:${esc(x.w)}" aria-label="聽問題">🔊</button><small>${esc(ex[3])}</small>
+        <div class="who">答　${answererOf(x.w).icon} ${esc(answererOf(x.w).name)}</div>${esc(ex[4])}<button class="say sm" data-exline="a:${esc(x.w)}" aria-label="聽回答">🔊</button><small>${esc(ex[5])}</small>
         <button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exqa="${esc(x.w)}">🔊 聽問答</button></div>` : ''}
     </section>
     <a class="big blue" style="text-align:center;text-decoration:none" href="${writeWordUrl(x.w, c.day, c.i)}">✍️ 寫寫看這個字<small>看、描、自己寫，寫好會回到這裡</small></a>
@@ -478,6 +479,12 @@ const personIdx = w => [...w].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0,
 const personOf = w => PEOPLE[personIdx(w)];
 const PAIR = [1, 4, 6, 0, 6, 1, 3];   // 問的人配固定的回答的人，聲音差很多
 const answererOf = w => PEOPLE[PAIR[personIdx(w)]];
+function linePart(w, which) {   // 某一句：英文用這個角色的聲音，後面接同一個角色的中文翻譯
+  const ex = EX[w], me = personOf(w), ans = answererOf(w);
+  return which === 'e' ? [{ t: ex[0], lang: 'en', who: me }, { t: ex[1], lang: 'zh', who: me }]
+    : which === 'q' ? [{ t: ex[2], lang: 'en', who: me }, { t: ex[3], lang: 'zh', who: me }]
+    : [{ t: ex[4], lang: 'en', who: ans }, { t: ex[5], lang: 'zh', who: ans }];
+}
 function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
   try {
     if (spoke) speechSynthesis.cancel();
@@ -486,7 +493,7 @@ function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
     parts.forEach(p => {
       if (!p.t) return;
       const u = new SpeechSynthesisUtterance(p.t);
-      if (p.lang === 'zh') { u.lang = 'zh-TW'; u.rate = .9; if (zv) { u.voice = zv; u.lang = zv.lang; } }
+      if (p.lang === 'zh') { u.lang = 'zh-TW'; u.rate = p.who ? Math.min(1, p.who.rate + .12) : .9; if (p.who) u.pitch = p.who.pitch; if (zv) { u.voice = zv; u.lang = zv.lang; } }
       else {
         u.lang = 'en-US'; u.rate = p.who ? p.who.rate : .85;
         const v = p.who && voiceFor(p.who.sex); if (v) { u.voice = v; u.lang = v.lang; }
@@ -522,7 +529,7 @@ function sentEmoji(text, max = 4) {
   });
   return out.slice(0, max).join(' ');
 }
-const dialogPic = w => { const ex = EX[w], me = personOf(w), ans = answererOf(w); return `${me.icon}<small>💬</small>${ans.icon}<small>｜</small>${sentEmoji(ex[2] + ' ' + ex[4])}`; };
+const dialogPic = w => { const ex = EX[w], me = personOf(w), ans = answererOf(w); return `${me.icon}<span class="sm">💬</span>${ans.icon}<span class="sm">｜</span>${sentEmoji(ex[2] + ' ' + ex[4])}`; };
 
 // ---------- 例句練習：例句重組、聽句重組、問答排序、造句 ----------
 const SMODES = { mix: '例句綜合', order: '例句重組', listen: '聽句重組', qzh: '聽問題排中文', dialog: '聽問題排回答', make: '造句' };
@@ -601,7 +608,7 @@ function sentFinish(ok, given) {   // 這一題結束：記錄、唸出正確的
   const st = ws(q.w); st.last = today(); if (ok) st.sentRight = (st.sentRight || 0) + 1; else st.sentWrong = (st.sentWrong || 0) + 1;
   const isZh = q.type === 'qzh', zhLine = isZh ? ex[2] : q.type === 'dialog' ? ex[5] : ex[1];
   if (q.type === 'dialog' || isZh) { const t = $('qtxt'); if (t) t.hidden = false; }   // 做完就把問題文字顯示出來
-  const parts = isZh ? [{ t: ex[2], lang: 'en', who: me }, { t: ex[3], lang: 'zh' }] : [{ t: SP.target, lang: 'en', who: q.type === 'dialog' ? ans : me }, { t: zhLine, lang: 'zh' }];
+  const parts = isZh ? [{ t: ex[2], lang: 'en', who: me }, { t: ex[3], lang: 'zh', who: me }] : [{ t: SP.target, lang: 'en', who: q.type === 'dialog' ? ans : me }, { t: zhLine, lang: 'zh', who: q.type === 'dialog' ? ans : me }];
   SP.replay = parts;
   const picHtml = (q.type === 'dialog' || isZh) ? dialogPic(q.w) : sentEmoji(ex[0]);
   $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 太棒了！</span>' : '<span style="color:#b26a00">看看正確的答案：</span>') + `<div class="pic">${picHtml}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(SP.target)}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(zhLine)}</div>`;
@@ -648,7 +655,7 @@ function sentFinishMake(ok, text) {
   $('fb').innerHTML = ok
     ? `<div style="font-size:34px;color:#2e7d32">🎉 好棒棒！</div><div class="pic">${sentEmoji(text)}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(text.trim())}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div>`
     : `<span style="color:#b26a00">看看範例：</span><div class="pic">${sentEmoji(ex[0])}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(ex[0])}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(ex[1])}</div>`;
-  SP.replay = ok ? [{ t: text.trim(), lang: 'en', who: me }] : [{ t: ex[0], lang: 'en', who: me }, { t: ex[1], lang: 'zh' }];
+  SP.replay = ok ? [{ t: text.trim(), lang: 'en', who: me }] : [{ t: ex[0], lang: 'en', who: me }, { t: ex[1], lang: 'zh', who: me }];
   speakParts(ok ? [{ t: '好棒棒！', lang: 'zh' }, ...SP.replay] : SP.replay);
   const last = SP.i >= SP.list.length - 1;
   $('next').innerHTML = `<button class="big ${last ? 'green' : ''}" data-act="snext" style="text-align:center">${last ? '做完了 ✔' : '下一題 ▶'}</button>`;
@@ -854,10 +861,12 @@ function sentDone() {
 
 // ---------- 事件 ----------
 $app.addEventListener('click', e => {
+  const el = e.target.closest('[data-exline]');
+  if (el) { const [k, w] = el.dataset.exline.split(':'); if (EX[w]) speakParts(linePart(w, k)); return; }
   const ef = e.target.closest('[data-exfull]');
-  if (ef) { const w = ef.dataset.exfull, ex = EX[w]; if (ex) speakParts([{ t: ex[0], lang: 'en', who: personOf(w) }, { t: ex[1], lang: 'zh' }]); return; }
+  if (ef) { if (EX[ef.dataset.exfull]) speakParts(linePart(ef.dataset.exfull, 'e')); return; }
   const eq = e.target.closest('[data-exqa]');
-  if (eq) { const w = eq.dataset.exqa, ex = EX[w]; if (ex) speakParts([{ t: ex[2], lang: 'en', who: personOf(w) }, { t: ex[4], lang: 'en', who: answererOf(w) }]); return; }
+  if (eq) { const w = eq.dataset.exqa; if (EX[w]) speakParts([...linePart(w, 'q'), ...linePart(w, 'a')]); return; }
   const rp = e.target.closest('[data-sreplay]'); if (rp && SP && SP.replay) { speakParts(SP.replay); return; }
   const ss = e.target.closest('[data-sspeak]'); if (ss && SP) { sentSpeak(ss.dataset.sspeak); return; }
   const sb2 = e.target.closest('[data-sbank]');
@@ -898,7 +907,7 @@ $app.addEventListener('click', e => {
       const q = SP.list[SP.i], ex = EX[q.w], e = $('mkex');
       e.hidden = false;
       e.innerHTML = `${personOf(q.w).icon} ${esc(personOf(q.w).name)} 的範例：<br><b style="font-size:20px">${esc(ex[0])}</b><br>${esc(ex[1])}<br><span class="hint">看完範例，自己寫一個不一樣的句子，再按「檢查」。</span>`;
-      speakParts([{ t: ex[0], lang: 'en', who: personOf(q.w) }, { t: ex[1], lang: 'zh' }]);
+      speakParts(linePart(q.w, 'e'));
       $('mkskip').hidden = false;
       $('mk').focus();
       break;

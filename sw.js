@@ -1,4 +1,4 @@
-const CACHE = 'gept15-practice-v8';
+const CACHE = 'gept15-practice-v9';
 const FILES = [
   './',
   'index.html',
