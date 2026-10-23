@@ -75,6 +75,7 @@ main { max-width:640px; margin:0 auto; padding:14px; }
 table { width:100%; border-collapse:collapse; font-size:16px; }
 th,td { text-align:left; padding:7px 4px; border-top:1px solid #f0e0d2; }
 select { font-size:17px; padding:6px; border-radius:8px; }
+.ver { font-size:12px; font-weight:normal; color:#6b4a30; background:rgba(255,255,255,.65); border-radius:8px; padding:2px 7px; margin-left:6px; white-space:nowrap; }
 .who { font-size:15px; color:#8a6a50; margin:6px 0 2px; }
 .ex + .ex { margin-top:8px; }
 .sline { display:flex; flex-wrap:wrap; gap:8px; min-height:58px; padding:10px; border:2px dashed #f1d9bf; border-radius:14px; margin:10px 0; align-content:flex-start; }
@@ -89,7 +90,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 </style>
 </head>
 <body>
-<header><a href="./">🏠</a><h1>📅 每日 15 字</h1><a href="https://alphones66.github.io/english-writing/" id="toWrite">✍️ 寫字</a></header>
+<header><a href="./">🏠</a><h1>📅 每日 15 字<span class="ver" id="ver"></span></h1><a href="https://alphones66.github.io/english-writing/" id="toWrite">✍️ 寫字</a></header>
 <main id="app"></main>
 
 <script src="gept-elementary.js"></script>
@@ -98,6 +99,8 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="gept-order.js"></script>
 <script>
 'use strict';
+const APP_VER = 'v2026.10.23-2';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
 const ORD = window.GEPT_ORDER || null;             // 國一、國二課本常用的字先練（tools/build_gept_order.py 從教材統計）
