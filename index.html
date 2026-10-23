@@ -99,7 +99,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="gept-order.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.23-2';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.23-3';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -519,7 +519,9 @@ function sentQ() {
       <div class="hint" style="text-align:center">用「${esc(x.w)}」寫一個英文句子（至少 3 個字，開頭大寫，最後加句點）</div>
       <input class="mk" id="mk" type="text" autocapitalize="sentences" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="例如：${esc(ex[0].split(/\s+/).slice(0, 2).join(' '))} …">
       <div class="mkhint" id="mkhint" hidden></div>
-      <div class="btns"><button type="button" data-act="mkshow">看範例</button><button type="button" class="ok" data-act="mkcheck">檢查</button></div>`;
+      <div class="mkhint" id="mkex" hidden style="background:#e8f5e9"></div>
+      <div class="btns"><button type="button" data-act="mkshow">👀 看範例</button><button type="button" class="ok" data-act="mkcheck">✔ 檢查</button></div>
+      <div id="mkskip" hidden style="margin-top:10px"><button class="mini" data-act="mkskip">先跳過這題</button></div>`;
   } else {
     const isZh = q.type === 'qzh';
     SP.toks = isZh ? zhToks(ex[3]) : toks(q.type === 'dialog' ? ex[4] : ex[0]);
@@ -587,14 +589,27 @@ function sentCheckBuilt() {
   $('fb').innerHTML = '<span style="color:#b26a00">差一點點，再排一次</span>';
   setTimeout(() => { if (SP && !SP.answered) { SP.got = []; drawSent(); $('fb').textContent = ''; } }, 1100);
 }
+function markMine(text, word) {
+  const t = text.trim(), red = x => `<span style="color:#d63031;text-decoration:underline">${esc(x)}</span>`;
+  let h = '';
+  const chars = Array.from(t);
+  chars.forEach((ch, i) => { h += i === 0 && !/[A-Z]/.test(ch) ? red(ch) : esc(ch); });
+  if (t && !/[.!?]$/.test(t)) h += red('＿');
+  const base = word.includes(' ') ? word.toLowerCase() : word.toLowerCase().slice(0, Math.max(2, word.length - 1));
+  if (!t.toLowerCase().includes(base)) h += ' ' + red('（少了 ' + word + '）');
+  if (t.split(/\s+/).filter(Boolean).length < 3) h += ' ' + red('（太短）');
+  return h || esc(t);
+}
 function sentFinishMake(ok, text) {
   const q = SP.list[SP.i], ex = EX[q.w], me = personOf(q.w);
   SP.answered = true;
   SP.items.push({ w: q.w, type: 'make', ok, ans: text.trim() });
   const st = ws(q.w); st.last = today(); if (ok) st.sentRight = (st.sentRight || 0) + 1; else st.sentWrong = (st.sentWrong || 0) + 1;
-  $('mkhint').hidden = true; $('mk').disabled = true;
-  $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 句子寫得很好！</span>' : '<span style="color:#b26a00">看看範例：</span>') + `<div style="font-size:21px;margin-top:6px"><b>${esc(ex[0])}</b></div><div class="hint">${esc(ex[1])}</div>`;
-  speakParts([{ t: ok ? text.trim() : ex[0], lang: 'en', who: me }, ...(ok ? [] : [{ t: ex[1], lang: 'zh' }])]);
+  $('mkhint').hidden = true; $('mkex').hidden = true; $('mkskip').hidden = true; $('mk').disabled = true;
+  $('fb').innerHTML = ok
+    ? `<div style="font-size:34px;color:#2e7d32">🎉 好棒棒！</div><div style="font-size:21px;margin-top:6px"><b>${esc(text.trim())}</b></div>`
+    : `<span style="color:#b26a00">看看範例：</span><div style="font-size:21px;margin-top:6px"><b>${esc(ex[0])}</b></div><div class="hint">${esc(ex[1])}</div>`;
+  speakParts(ok ? [{ t: '好棒棒！', lang: 'zh' }, { t: text.trim(), lang: 'en', who: me }] : [{ t: ex[0], lang: 'en', who: me }, { t: ex[1], lang: 'zh' }]);
   const last = SP.i >= SP.list.length - 1;
   $('next').innerHTML = `<button class="big ${last ? 'green' : ''}" data-act="snext" style="text-align:center">${last ? '做完了 ✔' : '下一題 ▶'}</button>`;
   prac.save();
@@ -660,13 +675,25 @@ $app.addEventListener('click', e => {
     case 'mkcheck': {
       if (!SP || SP.answered) break;
       const q = SP.list[SP.i], text = $('mk').value, probs = mkProblems(text, q.w), h = $('mkhint');
+      if (!text.trim()) { h.hidden = false; h.innerHTML = '先在上面的格子寫一個句子，再按「檢查」。'; break; }
       if (!probs.length) { sentFinishMake(true, text); break; }
       SP.tries++;
-      h.hidden = false; h.innerHTML = '再改一下：<br>' + probs.map(p => '・' + esc(p)).join('<br>');
-      if (SP.tries >= 3) sentFinishMake(false, text);
+      h.hidden = false;
+      h.innerHTML = `你寫的：<b style="font-size:19px">${markMine(text, q.w)}</b><br>要改的地方（紅色是有問題的）：<br>` + probs.map(p => '・' + esc(p)).join('<br>') + '<br>改好再按一次「檢查」。';
+      $('mkskip').hidden = false;
       break;
     }
-    case 'mkshow': if (SP && !SP.answered) sentFinishMake(false, $('mk').value); break;
+    case 'mkshow': {   // 只是給你看範例，題目還沒結束，看完可以接著自己寫
+      if (!SP || SP.answered) break;
+      const q = SP.list[SP.i], ex = EX[q.w], e = $('mkex');
+      e.hidden = false;
+      e.innerHTML = `${personOf(q.w).icon} ${esc(personOf(q.w).name)} 的範例：<br><b style="font-size:20px">${esc(ex[0])}</b><br>${esc(ex[1])}<br><span class="hint">看完範例，自己寫一個不一樣的句子，再按「檢查」。</span>`;
+      speakParts([{ t: ex[0], lang: 'en', who: personOf(q.w) }, { t: ex[1], lang: 'zh' }]);
+      $('mkskip').hidden = false;
+      $('mk').focus();
+      break;
+    }
+    case 'mkskip': if (SP && !SP.answered) sentFinishMake(false, $('mk').value); break;
     case 'practice': startSession('practice', getView(), dayWords(getView())); break;
     case 'test': startSession('test', getView(), dayWords(getView())); break;
     case 'review': startSession('review', 0, shuffle(dueWords().slice(0, 40)).slice(0, PER)); break;
