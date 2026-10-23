@@ -103,7 +103,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="zhm-index.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.23-11';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.23-12';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -174,7 +174,7 @@ function dueWords() {   // 今天該複習的字：到期的、考試寫錯的
 // ---------- 發音 ----------
 let spoke = false, enVoices = [];
 function loadVoices() { try { enVoices = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); } catch (_) {} }
-try { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; } catch (_) {}
+try { loadVoices(); speechSynthesis.onvoiceschanged = () => { loadVoices(); if (document.querySelector('[data-voice]') && typeof home === 'function') home(); }; } catch (_) {}
 function speak(text) {
   try {
     stopClips();
@@ -206,6 +206,11 @@ function speakFull(x) {
   } catch (_) {}
 }
 function hush() { try { stopClips(); if (spoke) { spoke = false; speechSynthesis.cancel(); } } catch (_) {} }
+$app.addEventListener('change', e => {
+  const sel = e.target.closest('[data-voice]'); if (!sel) return;
+  try { localStorage.setItem('gept15-voice-' + sel.dataset.voice, sel.value); } catch (_) {}
+  home();
+});
 document.addEventListener('visibilitychange', () => { if (document.hidden) hush(); });
 window.addEventListener('pagehide', hush);
 
@@ -250,6 +255,15 @@ function home() {
       <h2>複習</h2>
       <div class="hint">${due.length ? `有 ${due.length} 個字該複習了，每次複習 ${Math.min(PER, due.length)} 題。` : '現在沒有要複習的字 👍'}</div>
       <button class="big blue" data-act="review" ${due.length ? '' : 'disabled'}>🔁 複習（${Math.min(PER, due.length)} 題）</button>
+    </section>
+    <section class="box">
+      <h2>🔊 英文聲音設定</h2>
+      <div class="hint">覺得哪個聲音怪怪的，可以在這裡換。選好按「試聽」。</div>
+      ${['m', 'f'].map(sx => `<label style="display:block;margin:10px 0 4px;font-weight:bold">${sx === 'm' ? '男生角色（爺爺、哥哥、老師、Ben）' : '女生角色（妹妹、媽媽、奶奶）'}</label>
+        <div class="row"><select data-voice="${sx}" style="flex:1;min-width:0">
+          <option value="">自動（現在用：${esc((voiceFor(sx) || {}).name || '預設聲音')}）</option>
+          ${enVoices.map(v => `<option value="${esc(v.voiceURI)}" ${savedVoice(sx) === v.voiceURI ? 'selected' : ''}>${esc(v.name)}（${esc(v.lang)}）</option>`).join('')}
+        </select><button class="mini" data-act="vtest" data-sex="${sx}">▶ 試聽</button></div>`).join('')}
     </section>
     <button class="big alt" data-act="records">📊 看練習和測驗記錄</button>`;
   document.getElementById('dayPick').onchange = e => { viewDay = +e.target.value; home(); };
@@ -475,9 +489,16 @@ const PEOPLE = [
 ];
 const FEMALE = /samantha|karen|moira|tessa|victoria|allison|ava|susan|zira|serena|fiona|nicky|kate|jenny|aria|emma|joanna|salli|kimberly|ivy|female/i;
 const MALE = /daniel|fred|alex|aaron|arthur|gordon|rishi|tom\b|david|mark|guy|male|ryan|oliver|matthew|justin|joey|eddy|reed|rocko/i;
+const NOVELTY = /fred|ralph|junior|albert|kathy|bahh|bells|boing|bubbles|cellos|deranged|hysterical|organ|princess|trinoids|whisper|zarvox|bad news|good news|superstar|wobble|jester|grandma|grandpa|rocko|eddy|flo\b|reed|sandy|shelley/i;
+const PREF = { m: ['daniel', 'arthur', 'aaron', 'alex', 'gordon', 'oliver', 'rishi', 'david', 'mark', 'guy', 'ryan', 'tom'], f: ['samantha', 'karen', 'moira', 'tessa', 'serena', 'allison', 'ava', 'susan', 'victoria', 'kate', 'fiona', 'zira', 'jenny', 'aria'] };
+const savedVoice = sex => { try { return localStorage.getItem('gept15-voice-' + sex) || ''; } catch (_) { return ''; } };
 function voiceFor(sex) {
-  const list = enVoices.filter(v => (sex === 'm' ? MALE : FEMALE).test(v.name) && !(sex === 'm' ? FEMALE : MALE).test(v.name));
-  return list.find(v => /en-US/i.test(v.lang)) || list[0] || null;
+  const pick = savedVoice(sex);
+  if (pick) { const v = enVoices.find(v => v.voiceURI === pick || v.name === pick); if (v) return v; }
+  const other = sex === 'm' ? FEMALE : MALE;
+  const list = enVoices.filter(v => (sex === 'm' ? MALE : FEMALE).test(v.name) && !other.test(v.name) && !NOVELTY.test(v.name));
+  const rank = v => { const i = PREF[sex].findIndex(n => v.name.toLowerCase().includes(n)); return (i < 0 ? 99 : i) + (/en-US/i.test(v.lang) ? 0 : .5); };
+  return list.sort((a, b) => rank(a) - rank(b))[0] || null;
 }
 const personIdx = w => [...w].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % PEOPLE.length;
 const personOf = w => PEOPLE[personIdx(w)];
@@ -943,6 +964,7 @@ $app.addEventListener('click', e => {
     case 'cprev': cardS.i--; card(); break;
     case 'cnext': cardS.i++; card(); break;
     case 'cdone': cardsDone(); break;
+    case 'vtest': { const sx = a.dataset.sex, who = sx === 'm' ? PEOPLE[2] : PEOPLE[3]; speakParts([{ t: 'Which bike is yours? That red one is mine.', lang: 'en', who }]); break; }
     case 'sent': startSent(a.dataset.mode, getView(), dayWords(getView())); break;
     case 'snext': SP.i++; SP.i < SP.list.length ? sentQ() : sentDone(); break;
     case 'squit': if (confirm('先離開？這一次不會記錄喔')) { SP = null; hush(); home(); } break;
