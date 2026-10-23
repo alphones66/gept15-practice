@@ -103,7 +103,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="zhm-index.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.23-12';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.23-13';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -171,6 +171,18 @@ function dueWords() {   // 今天該複習的字：到期的、考試寫錯的
   return Object.entries(prac.data.words).filter(([w, s]) => WMAP.has(w) && s.due && s.due <= t).sort((a, b) => a[1].due.localeCompare(b[1].due)).map(([w]) => w);
 }
 
+// ---------- 英文讀音修正：語音引擎唸不準的字（例如 yours），朗讀時換成唸得對的拼法；畫面上還是原本的字 ----------
+const ENPRON_DEFAULT = 'yours=yorz\nours=hours\ntheirs=there\'s\nhers=hurz';
+function enPronText() { try { const v = localStorage.getItem('gept15-enpron'); return v === null ? ENPRON_DEFAULT : v; } catch (_) { return ENPRON_DEFAULT; } }
+function fixEn(t) {
+  enPronText().split('\n').forEach(l => {
+    const i = l.indexOf('='); if (i < 1) return;
+    const a = l.slice(0, i).trim(), b = l.slice(i + 1).trim(); if (!a || !b) return;
+    t = t.replace(new RegExp("\\b" + a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "\\b", 'gi'), b);
+  });
+  return t;
+}
+
 // ---------- 發音 ----------
 let spoke = false, enVoices = [];
 function loadVoices() { try { enVoices = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); } catch (_) {} }
@@ -179,7 +191,7 @@ function speak(text) {
   try {
     stopClips();
     if (spoke) speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(fixEn(text));
     u.lang = 'en-US'; u.rate = .85;
     const v = enVoices.find(v => /en[-_]US/i.test(v.lang)) || enVoices[0]; if (v) { u.voice = v; u.lang = v.lang; }
     spoke = true; speechSynthesis.speak(u);
@@ -198,7 +210,7 @@ function speakFull(x) {
     spoke = true;
     parts.forEach(([text, lang, rate]) => {
       if (!text) return;
-      const u = new SpeechSynthesisUtterance(text);
+      const u = new SpeechSynthesisUtterance(lang === 'en' ? fixEn(text) : text);
       u.lang = lang === 'en' ? 'en-US' : 'zh-TW'; u.rate = rate;
       const v = lang === 'en' ? en : zhv; if (v) { u.voice = v; u.lang = v.lang; }
       speechSynthesis.speak(u);
@@ -207,6 +219,8 @@ function speakFull(x) {
 }
 function hush() { try { stopClips(); if (spoke) { spoke = false; speechSynthesis.cancel(); } } catch (_) {} }
 $app.addEventListener('change', e => {
+  const ta = e.target.closest('[data-enpron]');
+  if (ta) { try { localStorage.setItem('gept15-enpron', ta.value); } catch (_) {} return; }
   const sel = e.target.closest('[data-voice]'); if (!sel) return;
   try { localStorage.setItem('gept15-voice-' + sel.dataset.voice, sel.value); } catch (_) {}
   home();
@@ -264,6 +278,10 @@ function home() {
           <option value="">自動（現在用：${esc((voiceFor(sx) || {}).name || '預設聲音')}）</option>
           ${enVoices.map(v => `<option value="${esc(v.voiceURI)}" ${savedVoice(sx) === v.voiceURI ? 'selected' : ''}>${esc(v.name)}（${esc(v.lang)}）</option>`).join('')}
         </select><button class="mini" data-act="vtest" data-sex="${sx}">▶ 試聽</button></div>`).join('')}
+      <label style="display:block;margin:14px 0 4px;font-weight:bold">英文讀音修正（唸不準的字）</label>
+      <div class="hint">格式：<code>原本的字=唸起來對的拼法</code>，一行一個。例如 yours 唸怪怪的，就寫 <code>yours=yorz</code>，改到聽起來對為止。</div>
+      <textarea data-enpron="1" rows="4" style="width:100%;margin-top:6px;padding:8px;border:2px solid #f1d9bf;border-radius:10px;font-size:16px">${esc(enPronText())}</textarea>
+      <div class="row" style="margin-top:6px"><button class="mini" data-act="ptest">▶ 試聽 Which bike is yours?</button><button class="mini" data-act="preset">還原預設</button></div>
     </section>
     <button class="big alt" data-act="records">📊 看練習和測驗記錄</button>`;
   document.getElementById('dayPick').onchange = e => { viewDay = +e.target.value; home(); };
@@ -541,7 +559,7 @@ function unlockAudio() {   // iOS：要在按下去的那一下先讓音訊元�
   } catch (_) {}
 }
 function ttsOne(p) {
-  const u = new SpeechSynthesisUtterance(p.t);
+  const u = new SpeechSynthesisUtterance(p.lang === 'zh' ? p.t : fixEn(p.t));
   if (p.lang === 'zh') {
     const z = zhVoiceFor(p.who ? p.who.sex : 'f');   // 沒有錄音時：男角色用中文男聲；找不到就用現有的聲音再把音高壓低
     u.lang = 'zh-TW'; u.rate = p.who ? Math.min(1, p.who.rate + .12) : .9;
@@ -964,6 +982,8 @@ $app.addEventListener('click', e => {
     case 'cprev': cardS.i--; card(); break;
     case 'cnext': cardS.i++; card(); break;
     case 'cdone': cardsDone(); break;
+    case 'ptest': speakParts([{ t: 'Which bike is yours? That red one is mine.', lang: 'en', who: PEOPLE[2] }]); break;
+    case 'preset': try { localStorage.removeItem('gept15-enpron'); } catch (_) {} home(); break;
     case 'vtest': { const sx = a.dataset.sex, who = sx === 'm' ? PEOPLE[2] : PEOPLE[3]; speakParts([{ t: 'Which bike is yours? That red one is mine.', lang: 'en', who }]); break; }
     case 'sent': startSent(a.dataset.mode, getView(), dayWords(getView())); break;
     case 'snext': SP.i++; SP.i < SP.list.length ? sentQ() : sentDone(); break;
