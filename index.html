@@ -99,7 +99,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="gept-order.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.23-3';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.23-4';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -516,7 +516,7 @@ function sentQ() {
   if (q.type === 'make') {
     SP.target = ex[0];
     body = `<div class="qtext"><span class="emo">${PIC[x.w] || ''}</span><span class="w">${esc(x.w)}</span>${esc(x.short)}</div>
-      <div class="hint" style="text-align:center">用「${esc(x.w)}」寫一個英文句子（至少 3 個字，開頭大寫，最後加句點）</div>
+      <div class="hint" style="text-align:center">用「${esc(x.w)}」寫一個英文句子（至少 3 個字，開頭大寫，最後加句點）。會檢查常見的文法和拼字。</div>
       <input class="mk" id="mk" type="text" autocapitalize="sentences" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="例如：${esc(ex[0].split(/\s+/).slice(0, 2).join(' '))} …">
       <div class="mkhint" id="mkhint" hidden></div>
       <div class="mkhint" id="mkex" hidden style="background:#e8f5e9"></div>
@@ -589,11 +589,18 @@ function sentCheckBuilt() {
   $('fb').innerHTML = '<span style="color:#b26a00">差一點點，再排一次</span>';
   setTimeout(() => { if (SP && !SP.answered) { SP.got = []; drawSent(); $('fb').textContent = ''; } }, 1100);
 }
-function markMine(text, word) {
+function markMine(text, word, flagged) {
+  flagged = flagged || new Set();
   const t = text.trim(), red = x => `<span style="color:#d63031;text-decoration:underline">${esc(x)}</span>`;
-  let h = '';
-  const chars = Array.from(t);
-  chars.forEach((ch, i) => { h += i === 0 && !/[A-Z]/.test(ch) ? red(ch) : esc(ch); });
+  let h = '', k = -1;
+  t.split(/(\s+)/).forEach(p => {
+    if (!p) return;
+    if (/^\s+$/.test(p)) { h += esc(p); return; }
+    k++;
+    if (flagged.has(k)) h += red(p);
+    else if (k === 0 && !/^[A-Z]/.test(p)) h += red(p[0]) + esc(p.slice(1));
+    else h += esc(p);
+  });
   if (t && !/[.!?]$/.test(t)) h += red('＿');
   const base = word.includes(' ') ? word.toLowerCase() : word.toLowerCase().slice(0, Math.max(2, word.length - 1));
   if (!t.toLowerCase().includes(base)) h += ' ' + red('（少了 ' + word + '）');
@@ -614,6 +621,171 @@ function sentFinishMake(ok, text) {
   $('next').innerHTML = `<button class="big ${last ? 'green' : ''}" data-act="snext" style="text-align:center">${last ? '做完了 ✔' : '下一題 ▶'}</button>`;
   prac.save();
 }
+// ---------- 造句的文法檢查（離線規則：抓常見的錯，不是所有錯誤都抓得到）----------
+const GR = (() => {
+  const heads = new Set(), prim = new Set(), anyVerb = new Set(), nouns = new Set(), pure = new Set();
+  ALPHA.forEach(x => {
+    const w = x.w.toLowerCase();
+    w.split(/[\s\-]+/).forEach(p => { p = p.replace(/[^a-z']/g, ''); if (p) heads.add(p); });
+    if (!/^[a-z]+$/.test(w)) return;
+    if (x.pos.includes('動')) anyVerb.add(w);
+    if (x.pos.startsWith('動')) prim.add(w);
+    if (x.pos === '動') pure.add(w);
+    if (x.pos.includes('名')) nouns.add(w);
+  });
+  // 例句裡出現過的字也都算「看過的字」（mom、bike、Tom 這類字表沒有、但是正確的字），才不會把正確的字當成拼錯
+  const seen = new Set();
+  Object.values(EX).forEach(e => [e[0], e[2], e[4]].forEach(t => (t.toLowerCase().replace(/’/g, "'").match(/[a-z]+(?:'[a-z]+)?/g) || []).forEach(w => seen.add(w))));
+  const MODAL = new Set(['can', 'could', 'may', 'might', 'must', 'shall', 'should', 'will', 'would']);
+  const BE = new Set(['am', 'is', 'are', 'was', 'were', 'be', 'been', 'being']);
+  const AUX = new Set(['do', 'does', 'did', 'have', 'has', 'had', "don't", "doesn't", "didn't", "haven't", "hasn't", "hadn't"]);
+  const IRR = { was: 'be', were: 'be', been: 'be', had: 'have', has: 'have', did: 'do', does: 'do', done: 'do', went: 'go', gone: 'go', ate: 'eat', eaten: 'eat', saw: 'see', seen: 'see', bought: 'buy', brought: 'bring', took: 'take', taken: 'take', came: 'come', made: 'make', said: 'say', got: 'get', gave: 'give', given: 'give', knew: 'know', known: 'know', thought: 'think', told: 'tell', found: 'find', ran: 'run', sat: 'sit', stood: 'stand', wrote: 'write', written: 'write', drove: 'drive', rode: 'ride', flew: 'fly', swam: 'swim', sang: 'sing', began: 'begin', lost: 'lose', paid: 'pay', met: 'meet', felt: 'feel', kept: 'keep', left: 'leave', slept: 'sleep', spoke: 'speak', taught: 'teach', heard: 'hear', sold: 'sell', won: 'win', wore: 'wear', grew: 'grow', drew: 'draw', fell: 'fall', forgot: 'forget', built: 'build', sent: 'send', spent: 'spend', woke: 'wake', broke: 'break', chose: 'choose' };
+  const PAST_ONLY = new Set(Object.keys(IRR).filter(k => !['has', 'does', 'been', 'done', 'gone', 'left', 'got'].includes(k)));
+  const IRRPL = new Set(['children', 'men', 'women', 'feet', 'teeth', 'mice', 'people', 'fish']);
+  const CONTR = new Set(["i'm", "i'll", "i've", "i'd", "you're", "you'll", "you've", "he's", "she's", "it's", "we're", "they're", "that's", "there's", "what's", "let's", "don't", "doesn't", "didn't", "can't", "couldn't", "won't", "wouldn't", "isn't", "aren't", "wasn't", "weren't", "haven't", "hasn't", "mustn't", "shouldn't", "o'clock", "ok", "okay", "mr", "mrs", "ms", "dr", "tv", "pm", "am", "mom", "mum", "dad"]);
+  const NUMS = new Set(['two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'twenty', 'thirty', 'forty', 'fifty', 'hundred', 'many', 'several']);
+  const NUMLIKE = /^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|am|pm|a\.m\.|p\.m\.|o'clock|thirty|half|quarter)$/;
+  const UNCOUNT = new Set(['water', 'rice', 'milk', 'money', 'music', 'homework', 'food', 'bread', 'juice', 'tea', 'coffee', 'work', 'fun', 'time', 'weather', 'news', 'information', 'furniture', 'luck', 'advice', 'paper', 'hair']);
+  const SUBJ_PL = new Set(['i', 'we', 'they']);
+  const NOCHG = new Set(['hit', 'quit', 'cost', 'burst', 'cut', 'put', 'set', 'let', 'read', 'hurt', 'shut', 'spread', 'bet', 'beat']);
+  const ONOM = new Set(['woof', 'meow', 'quack', 'moo', 'bye', 'ha', 'no', 'yes', 'very', 'so', 'bang', 'knock', 'tick', 'ding', 'oink', 'baa', 'hello', 'hi']);
+  const TIMEW = new Set(['past', 'to', 'before', 'after', 'of', 'and', 'more', 'less', 'minutes', 'minute']);
+  const OVERGEN = (() => {
+    const m = {};
+    Object.entries(IRR).forEach(([past, base]) => {
+      if (['has', 'does', 'been', 'done', 'gone'].includes(past) || past === base) return;
+      const forms = [base.endsWith('e') ? base + 'd' : base + 'ed'];
+      if (/[^aeiou][aeiou][^aeiouwy]$/.test(base)) forms.push(base + base.slice(-1) + 'ed');   // runned、getted、sitted
+      forms.forEach(f => { if (!heads.has(f) && !seen.has(f)) m[f] = [base, past]; });
+    });
+    return m;
+  })();
+  const ACTION = new Set(['go', 'come', 'eat', 'drink', 'play', 'run', 'walk', 'study', 'read', 'write', 'see', 'watch', 'sleep', 'swim', 'sing', 'dance', 'cook', 'buy', 'sell', 'make', 'take', 'give', 'get', 'like', 'love', 'want', 'need']);
+  const sForm = v => /(s|x|z|ch|sh|o)$/.test(v) ? v + 'es' : /[^aeiou]y$/.test(v) ? v.slice(0, -1) + 'ies' : v + 's';
+  const plural = n => /[^aeiou]y$/.test(n) ? n.slice(0, -1) + 'ies' : /(s|x|z|ch|sh)$/.test(n) ? n + 'es' : n + 's';
+  const stems = t => {
+    const o = [];
+    if (t.endsWith('ies')) o.push(t.slice(0, -3) + 'y');
+    if (t.endsWith('es')) o.push(t.slice(0, -2));
+    if (t.endsWith('s') && !t.endsWith('ss')) o.push(t.slice(0, -1));
+    if (t.endsWith('ied')) o.push(t.slice(0, -3) + 'y');
+    if (t.endsWith('ed')) o.push(t.slice(0, -2), t.slice(0, -1), t.slice(0, -3));
+    if (t.endsWith('ing')) o.push(t.slice(0, -3), t.slice(0, -3) + 'e', t.slice(0, -4));
+    if (t.endsWith('er') || t.endsWith('est')) o.push(t.replace(/(er|est)$/, ''), t.replace(/(er|est)$/, 'e'), t.replace(/ier$|iest$/, 'y'));
+    if (t.endsWith('ly')) o.push(t.slice(0, -2), t.slice(0, -2) + 'e', t.slice(0, -3) + 'y');
+    return o;
+  };
+  const known = t => heads.has(t) || seen.has(t) || CONTR.has(t) || !!IRR[t] || IRRPL.has(t) || stems(t).some(x => heads.has(x) || seen.has(x));
+  const verbBase = t => {   // 動詞的變化形：回傳 { base, form }
+    if (IRR[t] && !['was', 'were', 'been', 'had', 'has', 'did', 'does'].includes(t) && anyVerb.has(IRR[t])) return { base: IRR[t], form: 'ed' };
+    const pick = f => { const b = stems(t).filter(x => x.length > 1 && anyVerb.has(x)); return b.length ? { base: b[0], form: f } : null; };
+    if (t.endsWith('ing')) return pick('ing');
+    if (t.endsWith('ed')) return pick('ed');
+    if (t.endsWith('s') && !heads.has(t) && !nouns.has(t)) return pick('s');
+    return null;
+  };
+  const dist = (a, b) => {
+    const m = a.length, n = b.length; let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
+    return prev[n];
+  };
+  const pool = [...new Set([...heads, ...seen])].filter(w => /^[a-z]{4,}$/.test(w));
+  const closest = t => {
+    let best = null, bd = 9;
+    for (const w of pool) { if (Math.abs(w.length - t.length) > 1 || w[0] !== t[0]) continue; const d = dist(t, w); if (d < bd) { bd = d; best = w; } }
+    return bd === 1 ? best : null;   // 只抓「差一個字母」的拼錯，其他的不亂猜
+  };
+  const VP = { listen: ['to'], wait: ['for'], belong: ['to'], laugh: ['at'], depend: ['on'], look: ['at', 'for', 'like', 'after', 'up', 'out', 'around', 'forward', 'into', 'over'] };
+  const DET = new Set(['the', 'a', 'an', 'my', 'your', 'his', 'her', 'our', 'their', 'this', 'that', 'these', 'those', 'some', 'it', 'him', 'them', 'me', 'us']);
+
+  function check(text) {
+    const msgs = [], flagged = new Set();
+    const raw = text.trim().split(/\s+/).filter(Boolean);
+    const tk = raw.map(r => r.replace(/^[^A-Za-z']+|[^A-Za-z']+$/g, ''));
+    const lo = tk.map(t => t.toLowerCase().replace(/’/g, "'"));
+    const flag = (i, msg) => { (Array.isArray(i) ? i : [i]).forEach(k => flagged.add(k)); if (!msgs.includes(msg)) msgs.push(msg); };
+    const isAux = t => BE.has(t) || AUX.has(t) || MODAL.has(t);
+    const verbLike = t => !!t && !isAux(t) && anyVerb.has(t);
+
+    lo.forEach((t, i) => {
+      const nx = lo[i + 1], pv = lo[i - 1];
+      const compound = pv === 'and' || pv === 'or';   // 「Tom and I are」不算 I are
+      if (tk[i] === 'i') flag(i, '「i」要寫成大寫的「I」');
+      if (OVERGEN[t]) flag(i, `${OVERGEN[t][0]} 的過去式不是 ${tk[i]}，是 ${OVERGEN[t][1]}`);
+      if ((t === 'a' || t === 'an') && nx && /^[a-z]/.test(nx)) {
+        const an = (/^[aeiou]/.test(nx) && !/^(uni|use|usu|eu|one|once|ubiq)/.test(nx)) || /^(hour|honest|honor|heir)/.test(nx);
+        if (t === 'a' && an) flag(i, `「${nx}」開頭是母音的聲音，前面要用 an`);
+        if (t === 'an' && !an) flag(i, `「${nx}」開頭不是母音的聲音，前面要用 a`);
+      }
+      if (nx && t === nx && !['that', 'had'].includes(t) && !ONOM.has(t) && /^[a-z]+$/.test(t)) flag([i, i + 1], `「${t}」重複了兩次`);
+      // be 動詞跟主詞
+      if (t === 'i' && !compound && (nx === 'is' || nx === 'are' || nx === 'be')) flag([i, i + 1], 'I 後面要用 am');
+      if (['he', 'she', 'it'].includes(t) && ['am', 'are', 'be'].includes(nx)) flag([i, i + 1], `${tk[i]} 後面要用 is（過去用 was）`);
+      if (['we', 'they'].includes(t) && ['is', 'am', 'was'].includes(nx)) flag([i, i + 1], `${tk[i]} 後面要用 are（過去用 were）`);
+      if (t === 'you' && ['is', 'am', 'was'].includes(nx) && !(i > 0 && verbLike(pv))) flag([i, i + 1], 'you 後面要用 are（過去用 were）');
+      if (t === 'i' && !compound && nx === 'were') flag([i, i + 1], 'I 後面要用 was');
+      // have / do 跟主詞
+      if (['he', 'she', 'it'].includes(t) && ['have', 'do', "don't", "haven't"].includes(nx)) flag([i, i + 1], `${tk[i]} 後面要用 ${{ have: 'has', do: 'does', "don't": "doesn't", "haven't": "hasn't" }[nx]}`);
+      if (SUBJ_PL.has(t) && !compound && ['has', 'does', "doesn't", "hasn't"].includes(nx)) flag([i, i + 1], `${tk[i]} 後面要用 ${{ has: 'have', does: 'do', "doesn't": "don't", "hasn't": "haven't" }[nx]}`);
+      if (['do', 'have', "don't", "haven't"].includes(t) && pv && nouns.has(pv) && !pv.endsWith('s') && !IRRPL.has(pv) && !SUBJ_PL.has(pv) && i >= 2 && (DET.has(lo[i - 2]) || ['my', 'your', 'his', 'her', 'our', 'their', 'the', 'a', 'an'].includes(lo[i - 2])) && !verbLike(pv))
+        flag([i - 1, i], `${tk[i - 1]} 是單數，後面要用 ${{ do: 'does', have: 'has', "don't": "doesn't", "haven't": "hasn't" }[t]}`);
+      // he/she/it 後面的動詞要加 s（疑問句 Does he play 不算；it 當受詞也不算）
+      const afterAux = pv && isAux(pv);
+      const objIt = t === 'it' && pv && (verbLike(pv) || DET.has(pv) || ['to', 'for', 'of', 'in', 'on', 'at', 'with', 'about', 'from', 'by'].includes(pv));
+      if ((t === 'he' || t === 'she' || (t === 'it' && !objIt)) && !afterAux && nx && verbLike(nx)) {
+        if (!NOCHG.has(nx)) flag([i, i + 1], `${tk[i]} 後面的動詞要加 s：${nx} → ${sForm(nx)}`);
+      }
+      // I / we / they 後面的動詞不加 s
+      if ((SUBJ_PL.has(t) || (t === 'you' && i === 0)) && !compound && nx && !isAux(nx)) {
+        const vb = verbBase(nx);
+        if (vb && vb.form === 's') flag([i, i + 1], `${tk[i]} 後面的動詞不加 s：${nx} → ${vb.base}`);
+      }
+      // 助動詞後面要用原形
+      if (MODAL.has(t)) {
+        let j = i + 1; while (lo[j] && ['not', 'never', 'also', 'always', 'often', 'really', 'just'].includes(lo[j])) j++;
+        const w = lo[j];
+        if (w === 'to') flag([i, j], `${tk[i]} 後面不用 to，直接接動詞原形`);
+        else if (w && !isAux(w) && !(t === 'may' && tk[i] === 'May' && w.endsWith('s'))) { const vb = verbBase(w); if (vb) flag([i, j], `${tk[i]} 後面的動詞要用原形：${w} → ${vb.base}`); }
+      }
+      // do / does / did 後面的動詞要用原形（中間可以有主詞）
+      if (['do', 'does', 'did', "don't", "doesn't", "didn't"].includes(t)) {
+        for (let j = i + 1; j <= i + 3 && lo[j]; j++) {
+          if (verbLike(lo[j]) && !verbBase(lo[j]) || lo[j] === 'not' || DET.has(lo[j])) break;
+          const vb = verbBase(lo[j]);
+          if (vb && !isAux(lo[j]) && (j > i + 1 || /n't$/.test(t) || vb.form === 'ed')) { flag([i, j], `${tk[i]} 後面的動詞要用原形：${lo[j]} → ${vb.base}`); break; }
+        }
+      }
+      // be + 動詞原形
+      if (['am', 'is', 'are'].includes(t) && nx && (pure.has(nx) || ACTION.has(nx)) && !isAux(nx)) flag([i, i + 1], `${tk[i]} 後面不能直接接動詞原形，要用 -ing（例如 ${nx}ing）或換句型`);
+      // 動詞 + 介系詞
+      if (VP[t] && nx && (DET.has(nx) || (t !== 'look' && nouns.has(nx) && !anyVerb.has(nx))) && !VP[t].includes(nx) && !((nx === 'a' || nx === 'an') && /^(minute|moment|second|while|bit|lot|little|few)$/.test(lo[i + 2] || ''))) flag([i, i + 1], `${tk[i]} 後面要加 ${VP[t][0]}：${tk[i]} ${VP[t][0]} ...`);
+      // 數字 + 單數名詞
+      if (NUMS.has(t) && nx && nouns.has(nx) && !UNCOUNT.has(nx) && !nx.endsWith('s') && !IRRPL.has(nx) && !NUMLIKE.test(nx) && !TIMEW.has(nx) && !(lo[i + 2] && (nouns.has(lo[i + 2]) || NUMLIKE.test(lo[i + 2]))) && pv !== 'at' && lo[i + 2] !== "o'clock") flag([i, i + 1], `${tk[i]} 後面的名詞要用複數：${nx} → ${plural(nx)}`);
+      // 拼字：只抓「差一個字母」的拼錯
+      if (/^[a-z]{4,}$/.test(t) && !known(t) && !(i > 0 && /^[A-Z]/.test(tk[i]))) {
+        const c = closest(t);
+        if (c) flag(i, `拼字：${tk[i]} 是不是要寫 ${c}？`);
+      }
+    });
+
+    // yesterday / ago / last night… 要用過去式
+    const pastWords = lo.some((t, i) => t === 'yesterday' || t === 'ago' || (t === 'last' && /^(night|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday|summer|winter|weekend)$/.test(lo[i + 1] || '')));
+    if (pastWords) {
+      const hasPast = lo.some(t => ['was', 'were', 'did', 'had', "didn't", "wasn't", "weren't"].includes(t) || PAST_ONLY.has(t) || (t.endsWith('ed') && verbBase(t)));
+      const hasPresent = lo.some((t, i) => ['am', 'is', 'are', 'do', 'does', 'have', 'has', "don't", "doesn't"].includes(t) || (i > 0 && verbLike(t) && !verbBase(t) && lo[i - 1] !== 'to' && !MODAL.has(lo[i - 1])) || (verbBase(t) && verbBase(t).form === 's'));
+      if (!hasPast && hasPresent) flag(lo.map((t, i) => i).filter(i => ['yesterday', 'ago', 'last'].includes(lo[i])), '有 yesterday／ago／last… 這種過去的時間，動詞要用過去式');
+    }
+    // 完全沒有動詞
+    const anyV = t => isAux(t) || anyVerb.has(t) || !!IRR[t] || !!verbBase(t) || stems(t).some(x => anyVerb.has(x));
+    const nonVerb = new Set();
+    ALPHA.forEach(x => { if (!x.pos.includes('動')) x.w.toLowerCase().split(/[\s\-]+/).forEach(w => nonVerb.add(w.replace(/[^a-z']/g, ''))); });
+    const surelyNot = t => !t || nonVerb.has(t) || CONTR.has(t) || stems(t).some(x => nonVerb.has(x) && !anyVerb.has(x)) || /^\d+$/.test(t);
+    if (raw.length >= 3 && !lo.some(anyV) && lo.every(surelyNot)) msgs.push('句子裡好像沒有動詞（做什麼、是什麼）');
+    return { msgs, flagged };
+  }
+  return { check, known };
+})();
+
 function mkProblems(text, word) {
   const t = text.trim(), tk = t.split(/\s+/).filter(Boolean), low = t.toLowerCase().replace(/[^a-z' -]/g, ' '), w = word.toLowerCase(), probs = [];
   const base = w.includes(' ') ? w : w.slice(0, Math.max(2, w.length - 1));
@@ -623,6 +795,10 @@ function mkProblems(text, word) {
   if (t && !/^[A-Z]/.test(t)) probs.push('第一個字母要大寫');
   if (t && !/[.!?]$/.test(t)) probs.push('最後要加句點（.）或問號（?）');
   return probs;
+}
+function mkIssues(text, word) {
+  const g = GR.check(text);
+  return { msgs: [...mkProblems(text, word), ...g.msgs], flagged: g.flagged };
 }
 function sentDone() {
   hush();
@@ -674,12 +850,12 @@ $app.addEventListener('click', e => {
     case 'sclear': if (SP && !SP.answered) { SP.got = []; drawSent(); } break;
     case 'mkcheck': {
       if (!SP || SP.answered) break;
-      const q = SP.list[SP.i], text = $('mk').value, probs = mkProblems(text, q.w), h = $('mkhint');
+      const q = SP.list[SP.i], text = $('mk').value, iss = mkIssues(text, q.w), probs = iss.msgs, h = $('mkhint');
       if (!text.trim()) { h.hidden = false; h.innerHTML = '先在上面的格子寫一個句子，再按「檢查」。'; break; }
       if (!probs.length) { sentFinishMake(true, text); break; }
       SP.tries++;
       h.hidden = false;
-      h.innerHTML = `你寫的：<b style="font-size:19px">${markMine(text, q.w)}</b><br>要改的地方（紅色是有問題的）：<br>` + probs.map(p => '・' + esc(p)).join('<br>') + '<br>改好再按一次「檢查」。';
+      h.innerHTML = `你寫的：<b style="font-size:19px">${markMine(text, q.w, iss.flagged)}</b><br>要改的地方（紅色是有問題的）：<br>` + probs.map(p => '・' + esc(p)).join('<br>') + '<br>改好再按一次「檢查」。';
       $('mkskip').hidden = false;
       break;
     }
