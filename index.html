@@ -102,7 +102,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="gept-order.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.23-7';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.23-8';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -268,6 +268,7 @@ function card() {
       <div><span class="pos">${esc(x.pos)}</span>${inBook(x.w) ? ' <span class="pos" style="background:#e3f2fd;color:#1565c0">📘 課本有出現</span>' : ''}</div>
       <div class="zh">${esc(x.zh)}</div>
       <button class="say" data-full="${esc(x.w)}">🔊 聽發音和意思</button>
+      ${zhNoMale() ? `<div class="hint" style="margin:6px 0">ⓘ 這台裝置沒有中文男聲，爺爺、哥哥、老師的中文翻譯只能用比較低的聲音。想要真的男聲：設定 → 輔助使用 → 朗讀內容 → 聲音 → 中文，下載男聲（例如 Li-mu）。目前有的中文聲音：${esc(zhVoices().map(v => v.name).join('、'))}</div>` : ''}
       ${ex ? `<div class="ex"><div class="pic">${sentEmoji(ex[0])}</div><div class="who">${personOf(x.w).icon} ${esc(personOf(x.w).name)} 說：</div>${esc(ex[0])}<button class="say sm" data-exline="e:${esc(x.w)}" aria-label="聽這句">🔊</button><small>${esc(ex[1])}</small><button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exfull="${esc(x.w)}">🔊 聽例句＋中文</button></div>
       <div class="ex"><div class="pic">${dialogPic(x.w)}</div><div class="who">問　${personOf(x.w).icon} ${esc(personOf(x.w).name)}</div>${esc(ex[2])}<button class="say sm" data-exline="q:${esc(x.w)}" aria-label="聽問題">🔊</button><small>${esc(ex[3])}</small>
         <div class="who">答　${answererOf(x.w).icon} ${esc(answererOf(x.w).name)}</div>${esc(ex[4])}<button class="say sm" data-exline="a:${esc(x.w)}" aria-label="聽回答">🔊</button><small>${esc(ex[5])}</small>
@@ -479,6 +480,18 @@ const personIdx = w => [...w].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0,
 const personOf = w => PEOPLE[personIdx(w)];
 const PAIR = [1, 4, 6, 0, 6, 1, 3];   // 問的人配固定的回答的人，聲音差很多
 const answererOf = w => PEOPLE[PAIR[personIdx(w)]];
+const ZH_MALE = /li-?mu|bin-?bin|kang-?kang|yun-?xi|yun-?jian|yun-?yang|yun-?jhe|zhi-?wei|danny|wan-?lung|male|男/i;
+const ZH_FEMALE = /mei-?jia|ting-?ting|sin-?ji|yu-?shu|hsiao|xiao|hui-?hui|yao-?yao|han-?han|ya-?ting|female|女/i;
+function zhVoices() { try { return speechSynthesis.getVoices().filter(v => /^zh|^cmn|^yue/i.test(v.lang)); } catch (_) { return []; } }
+function zhVoiceFor(sex) {   // 回傳 { v, real }：real＝真的有這個性別的中文聲音
+  const all = zhVoices(), pref = list => list.find(v => /zh[-_]TW/i.test(v.lang)) || list.find(v => /zh[-_]CN/i.test(v.lang)) || list[0] || null;
+  const male = all.filter(v => ZH_MALE.test(v.name) && !ZH_FEMALE.test(v.name));
+  const female = all.filter(v => !male.includes(v));
+  const hit = pref(sex === 'm' ? male : female);
+  if (hit) return { v: hit, real: true };
+  return { v: pref(all), real: false };
+}
+const zhNoMale = () => zhVoices().length > 0 && !zhVoices().some(v => ZH_MALE.test(v.name) && !ZH_FEMALE.test(v.name));
 function linePart(w, which) {   // 某一句：英文用這個角色的聲音，後面接同一個角色的中文翻譯
   const ex = EX[w], me = personOf(w), ans = answererOf(w);
   return which === 'e' ? [{ t: ex[0], lang: 'en', who: me }, { t: ex[1], lang: 'zh', who: me }]
@@ -489,11 +502,15 @@ function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
   try {
     if (spoke) speechSynthesis.cancel();
     spoke = true;
-    const zv = speechSynthesis.getVoices().find(v => /zh[-_]TW/i.test(v.lang)) || speechSynthesis.getVoices().find(v => /^zh/i.test(v.lang));
     parts.forEach(p => {
       if (!p.t) return;
       const u = new SpeechSynthesisUtterance(p.t);
-      if (p.lang === 'zh') { u.lang = 'zh-TW'; u.rate = p.who ? Math.min(1, p.who.rate + .12) : .9; if (p.who) u.pitch = p.who.pitch; if (zv) { u.voice = zv; u.lang = zv.lang; } }
+      if (p.lang === 'zh') {
+        const z = zhVoiceFor(p.who ? p.who.sex : 'f');   // 男角色用中文男聲；找不到男聲就用現有的聲音再把音高壓低
+        u.lang = 'zh-TW'; u.rate = p.who ? Math.min(1, p.who.rate + .12) : .9;
+        if (z.v) { u.voice = z.v; u.lang = z.v.lang; }
+        if (p.who) u.pitch = z.real ? Math.min(1.6, Math.max(.75, p.who.pitch)) : p.who.pitch;
+      }
       else {
         u.lang = 'en-US'; u.rate = p.who ? p.who.rate : .85;
         const v = p.who && voiceFor(p.who.sex); if (v) { u.voice = v; u.lang = v.lang; }
