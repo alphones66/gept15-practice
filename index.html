@@ -99,7 +99,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="gept-order.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.23-4';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.23-5';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -572,8 +572,10 @@ function sentFinish(ok, given) {   // 這一題結束：記錄、唸出正確的
   const st = ws(q.w); st.last = today(); if (ok) st.sentRight = (st.sentRight || 0) + 1; else st.sentWrong = (st.sentWrong || 0) + 1;
   const isZh = q.type === 'qzh', zhLine = isZh ? ex[2] : q.type === 'dialog' ? ex[5] : ex[1];
   if (q.type === 'dialog' || isZh) { const t = $('qtxt'); if (t) t.hidden = false; }   // 做完就把問題文字顯示出來
-  $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 太棒了！</span>' : '<span style="color:#b26a00">看看正確的答案：</span>') + `<div style="font-size:21px;margin-top:6px"><b>${esc(SP.target)}</b></div><div class="hint">${esc(zhLine)}</div>`;
-  speakParts(isZh ? [{ t: ex[2], lang: 'en', who: me }, { t: ex[3], lang: 'zh' }] : [{ t: SP.target, lang: 'en', who: q.type === 'dialog' ? ans : me }, { t: zhLine, lang: 'zh' }]);
+  const parts = isZh ? [{ t: ex[2], lang: 'en', who: me }, { t: ex[3], lang: 'zh' }] : [{ t: SP.target, lang: 'en', who: q.type === 'dialog' ? ans : me }, { t: zhLine, lang: 'zh' }];
+  SP.replay = parts;
+  $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 太棒了！</span>' : '<span style="color:#b26a00">看看正確的答案：</span>') + `<div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(SP.target)}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(zhLine)}</div>`;
+  speakParts(parts);
   const last = SP.i >= SP.list.length - 1;
   $('next').innerHTML = `<button class="big ${last ? 'green' : ''}" data-act="snext" style="text-align:center">${last ? '做完了 ✔' : '下一題 ▶'}</button>`;
   prac.save();
@@ -614,9 +616,10 @@ function sentFinishMake(ok, text) {
   const st = ws(q.w); st.last = today(); if (ok) st.sentRight = (st.sentRight || 0) + 1; else st.sentWrong = (st.sentWrong || 0) + 1;
   $('mkhint').hidden = true; $('mkex').hidden = true; $('mkskip').hidden = true; $('mk').disabled = true;
   $('fb').innerHTML = ok
-    ? `<div style="font-size:34px;color:#2e7d32">🎉 好棒棒！</div><div style="font-size:21px;margin-top:6px"><b>${esc(text.trim())}</b></div>`
-    : `<span style="color:#b26a00">看看範例：</span><div style="font-size:21px;margin-top:6px"><b>${esc(ex[0])}</b></div><div class="hint">${esc(ex[1])}</div>`;
-  speakParts(ok ? [{ t: '好棒棒！', lang: 'zh' }, { t: text.trim(), lang: 'en', who: me }] : [{ t: ex[0], lang: 'en', who: me }, { t: ex[1], lang: 'zh' }]);
+    ? `<div style="font-size:34px;color:#2e7d32">🎉 好棒棒！</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(text.trim())}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div>`
+    : `<span style="color:#b26a00">看看範例：</span><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(ex[0])}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(ex[1])}</div>`;
+  SP.replay = ok ? [{ t: text.trim(), lang: 'en', who: me }] : [{ t: ex[0], lang: 'en', who: me }, { t: ex[1], lang: 'zh' }];
+  speakParts(ok ? [{ t: '好棒棒！', lang: 'zh' }, ...SP.replay] : SP.replay);
   const last = SP.i >= SP.list.length - 1;
   $('next').innerHTML = `<button class="big ${last ? 'green' : ''}" data-act="snext" style="text-align:center">${last ? '做完了 ✔' : '下一題 ▶'}</button>`;
   prac.save();
@@ -825,6 +828,7 @@ $app.addEventListener('click', e => {
   if (ef) { const w = ef.dataset.exfull, ex = EX[w]; if (ex) speakParts([{ t: ex[0], lang: 'en', who: personOf(w) }, { t: ex[1], lang: 'zh' }]); return; }
   const eq = e.target.closest('[data-exqa]');
   if (eq) { const w = eq.dataset.exqa, ex = EX[w]; if (ex) speakParts([{ t: ex[2], lang: 'en', who: personOf(w) }, { t: ex[4], lang: 'en', who: answererOf(w) }]); return; }
+  const rp = e.target.closest('[data-sreplay]'); if (rp && SP && SP.replay) { speakParts(SP.replay); return; }
   const ss = e.target.closest('[data-sspeak]'); if (ss && SP) { sentSpeak(ss.dataset.sspeak); return; }
   const sb2 = e.target.closest('[data-sbank]');
   if (sb2 && SP && !SP.answered) { SP.got.push(+sb2.dataset.sbank); drawSent(); sentCheckBuilt(); return; }
