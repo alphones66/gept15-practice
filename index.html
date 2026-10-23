@@ -77,6 +77,8 @@ th,td { text-align:left; padding:7px 4px; border-top:1px solid #f0e0d2; }
 select { font-size:17px; padding:6px; border-radius:8px; }
 .ver { font-size:12px; font-weight:normal; color:#6b4a30; background:rgba(255,255,255,.65); border-radius:8px; padding:2px 7px; margin-left:6px; white-space:nowrap; }
 .who { font-size:15px; color:#8a6a50; margin:6px 0 2px; }
+.pic { font-size:38px; line-height:1.35; margin:4px 0 6px; letter-spacing:4px; }
+.pic small { font-size:22px; letter-spacing:0; margin:0 6px; opacity:.7; }
 .ex + .ex { margin-top:8px; }
 .sline { display:flex; flex-wrap:wrap; gap:8px; min-height:58px; padding:10px; border:2px dashed #f1d9bf; border-radius:14px; margin:10px 0; align-content:flex-start; }
 .stile { border:2px solid var(--orange); background:#fff; border-radius:12px; padding:8px 12px; font-size:20px; }
@@ -99,7 +101,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="gept-order.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.23-5';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.23-6';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -265,8 +267,8 @@ function card() {
       <div><span class="pos">${esc(x.pos)}</span>${inBook(x.w) ? ' <span class="pos" style="background:#e3f2fd;color:#1565c0">📘 課本有出現</span>' : ''}</div>
       <div class="zh">${esc(x.zh)}</div>
       <button class="say" data-full="${esc(x.w)}">🔊 聽發音和意思</button>
-      ${ex ? `<div class="ex"><div class="who">${personOf(x.w).icon} ${esc(personOf(x.w).name)} 說：</div>${esc(ex[0])}<small>${esc(ex[1])}</small><button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exfull="${esc(x.w)}">🔊 聽例句＋中文</button></div>
-      <div class="ex"><div class="who">問　${personOf(x.w).icon} ${esc(personOf(x.w).name)}</div>${esc(ex[2])}<small>${esc(ex[3])}</small>
+      ${ex ? `<div class="ex"><div class="pic">${sentEmoji(ex[0])}</div><div class="who">${personOf(x.w).icon} ${esc(personOf(x.w).name)} 說：</div>${esc(ex[0])}<small>${esc(ex[1])}</small><button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exfull="${esc(x.w)}">🔊 聽例句＋中文</button></div>
+      <div class="ex"><div class="pic">${dialogPic(x.w)}</div><div class="who">問　${personOf(x.w).icon} ${esc(personOf(x.w).name)}</div>${esc(ex[2])}<small>${esc(ex[3])}</small>
         <div class="who">答　${answererOf(x.w).icon} ${esc(answererOf(x.w).name)}</div>${esc(ex[4])}<small>${esc(ex[5])}</small>
         <button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exqa="${esc(x.w)}">🔊 聽問答</button></div>` : ''}
     </section>
@@ -495,6 +497,33 @@ function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
   } catch (_) {}
 }
 
+// ---------- 句子的小圖：從句子裡的字找圖示（起床、鬧鐘、媽媽、房子…）----------
+const PIC_SKIP = new Set(('a an the i me my mine you your yours he him his she her hers it its we us our they them their this that these those ' +
+  'is am are was were be been being do does did have has had can could will would should may might must shall to of in on at for from with by about as into over under ' +
+  'and or but so if then than not no yes very too also just only now here there again up down out off all any some every much many more most lot lots ' +
+  'what where who whom whose when why how which let please go goes went come comes came get gets got make makes made take takes took put say says said ' +
+  'one two three four five six seven eight nine ten like likes love loves want wants need needs help helps use uses know think feel after before today with without near next around always often sometimes').split(' '));
+const PIC_SKIP_NUM = new Set(['seven', 'six', 'five', 'four', 'three', 'two', 'one', 'eight', 'nine', 'ten']);
+const PIC_EXTRA = { mom: '👩', mum: '👩', mother: '👩', dad: '👨', father: '👨', grandma: '👵', grandmother: '👵', grandpa: '👴', grandfather: '👴', uncle: '👨', aunt: '👩', baby: '👶', tom: '👦', amy: '👧', ben: '🧒', mr: '🧑', mrs: '👩', miss: '👩' };
+const PIC_PHRASE = [['wake up', '🛌⏰'], ['get up', '🛌☀️'], ['go to bed', '🛏️😴'], ['go to school', '🎒🏫'], ['brush my teeth', '🪥😁'], ['take a shower', '🚿'], ['have lunch', '🍱'], ['have breakfast', '🍳'], ['have dinner', '🍽️'], ['do my homework', '📚✏️'], ['watch tv', '📺'], ['at home', '🏠'], ['ice cream', '🍦'], ['birthday', '🎂']];
+function picHead(tok) {
+  if (PIC_EXTRA[tok]) return null;
+  const c = [tok, tok.replace(/ies$/, 'y'), tok.replace(/es$/, ''), tok.replace(/s$/, ''), tok.replace(/ing$/, ''), tok.replace(/ing$/, 'e'), tok.replace(/ed$/, ''), tok.replace(/ed$/, 'e')];
+  return c.find(x => PIC[x]) || null;
+}
+function sentEmoji(text, max = 4) {
+  let t = ' ' + text.toLowerCase().replace(/[^a-z' ]/g, ' ') + ' ';
+  const out = [];
+  PIC_PHRASE.forEach(([ph, e]) => { if (t.includes(' ' + ph + ' ')) { out.push(e); t = t.replace(' ' + ph + ' ', ' '); } });
+  (t.match(/[a-z']+/g) || []).forEach(tok => {
+    if (PIC_SKIP.has(tok) && !PIC_EXTRA[tok]) return;
+    const e = PIC_EXTRA[tok] || PIC[picHead(tok)];
+    if (e && !out.includes(e)) out.push(e);
+  });
+  return out.slice(0, max).join(' ');
+}
+const dialogPic = w => { const ex = EX[w], me = personOf(w), ans = answererOf(w); return `${me.icon}<small>💬</small>${ans.icon}<small>｜</small>${sentEmoji(ex[2] + ' ' + ex[4])}`; };
+
 // ---------- 例句練習：例句重組、聽句重組、問答排序、造句 ----------
 const SMODES = { mix: '例句綜合', order: '例句重組', listen: '聽句重組', qzh: '聽問題排中文', dialog: '聽問題排回答', make: '造句' };
 let SP = null;
@@ -539,7 +568,7 @@ function sentQ() {
       : q.type === 'dialog'
       ? qBlock(`${ans.icon} ${esc(ans.name)} 要回答。把英文回答排出來。`)
       : q.type === 'order'
-      ? `<div class="qtext">${esc(ex[1])}</div><div class="hint" style="text-align:center">${me.icon} ${esc(me.name)} 說的。把單字排成英文句子。</div>`
+      ? `<div class="pic" style="text-align:center">${sentEmoji(ex[0])}</div><div class="qtext">${esc(ex[1])}</div><div class="hint" style="text-align:center">${me.icon} ${esc(me.name)} 說的。把單字排成英文句子。</div>`
       : q.type === 'listen'
         ? `<div class="qtext">聽一聽，排出句子</div><div class="say2"><button class="say" data-sspeak="1" style="font-size:30px;padding:16px 28px">🔊 ${me.icon}</button></div>`
         : '';
@@ -574,7 +603,8 @@ function sentFinish(ok, given) {   // 這一題結束：記錄、唸出正確的
   if (q.type === 'dialog' || isZh) { const t = $('qtxt'); if (t) t.hidden = false; }   // 做完就把問題文字顯示出來
   const parts = isZh ? [{ t: ex[2], lang: 'en', who: me }, { t: ex[3], lang: 'zh' }] : [{ t: SP.target, lang: 'en', who: q.type === 'dialog' ? ans : me }, { t: zhLine, lang: 'zh' }];
   SP.replay = parts;
-  $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 太棒了！</span>' : '<span style="color:#b26a00">看看正確的答案：</span>') + `<div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(SP.target)}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(zhLine)}</div>`;
+  const picHtml = (q.type === 'dialog' || isZh) ? dialogPic(q.w) : sentEmoji(ex[0]);
+  $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 太棒了！</span>' : '<span style="color:#b26a00">看看正確的答案：</span>') + `<div class="pic">${picHtml}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(SP.target)}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(zhLine)}</div>`;
   speakParts(parts);
   const last = SP.i >= SP.list.length - 1;
   $('next').innerHTML = `<button class="big ${last ? 'green' : ''}" data-act="snext" style="text-align:center">${last ? '做完了 ✔' : '下一題 ▶'}</button>`;
@@ -616,8 +646,8 @@ function sentFinishMake(ok, text) {
   const st = ws(q.w); st.last = today(); if (ok) st.sentRight = (st.sentRight || 0) + 1; else st.sentWrong = (st.sentWrong || 0) + 1;
   $('mkhint').hidden = true; $('mkex').hidden = true; $('mkskip').hidden = true; $('mk').disabled = true;
   $('fb').innerHTML = ok
-    ? `<div style="font-size:34px;color:#2e7d32">🎉 好棒棒！</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(text.trim())}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div>`
-    : `<span style="color:#b26a00">看看範例：</span><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(ex[0])}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(ex[1])}</div>`;
+    ? `<div style="font-size:34px;color:#2e7d32">🎉 好棒棒！</div><div class="pic">${sentEmoji(text)}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(text.trim())}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div>`
+    : `<span style="color:#b26a00">看看範例：</span><div class="pic">${sentEmoji(ex[0])}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(ex[0])}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(ex[1])}</div>`;
   SP.replay = ok ? [{ t: text.trim(), lang: 'en', who: me }] : [{ t: ex[0], lang: 'en', who: me }, { t: ex[1], lang: 'zh' }];
   speakParts(ok ? [{ t: '好棒棒！', lang: 'zh' }, ...SP.replay] : SP.replay);
   const last = SP.i >= SP.list.length - 1;
