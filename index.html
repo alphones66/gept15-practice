@@ -100,9 +100,10 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="gept-examples.js"></script>
 <script src="gept-emoji.js"></script>
 <script src="gept-order.js"></script>
+<script src="zhm-index.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.23-9';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.23-10';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -176,6 +177,7 @@ function loadVoices() { try { enVoices = speechSynthesis.getVoices().filter(v =>
 try { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; } catch (_) {}
 function speak(text) {
   try {
+    stopClips();
     if (spoke) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'en-US'; u.rate = .85;
@@ -186,6 +188,7 @@ function speak(text) {
 // 完整唸一個單字：整個字 → 一個一個字母 → 再唸一次整個字 → 中文意思（例：the、T H E、the、這個那個）
 function speakFull(x) {
   try {
+    stopClips();
     if (spoke) speechSynthesis.cancel();
     const en = enVoices.find(v => /en[-_]US/i.test(v.lang)) || enVoices[0];
     const zhv = speechSynthesis.getVoices().find(v => /zh[-_]TW/i.test(v.lang)) || speechSynthesis.getVoices().find(v => /^zh/i.test(v.lang));
@@ -202,7 +205,7 @@ function speakFull(x) {
     });
   } catch (_) {}
 }
-function hush() { try { if (spoke) { spoke = false; speechSynthesis.cancel(); } } catch (_) {} }
+function hush() { try { stopClips(); if (spoke) { spoke = false; speechSynthesis.cancel(); } } catch (_) {} }
 document.addEventListener('visibilitychange', () => { if (document.hidden) hush(); });
 window.addEventListener('pagehide', hush);
 
@@ -499,26 +502,63 @@ function linePart(w, which) {   // 某一句：英文用這個角色的聲音，
     : which === 'q' ? [{ t: ex[2], lang: 'en', who: me }, { t: ex[3], lang: 'zh', who: me }]
     : [{ t: ex[4], lang: 'en', who: ans }, { t: ex[5], lang: 'zh', who: ans }];
 }
+// 男生角色的中文翻譯有事先錄好的台灣男聲（zhm/，只有部署版有）；其他的用裝置內建的聲音。
+// 錄音和語音要一句接一句唸，所以改成「唸完一句再唸下一句」。
+const CLIP_RATE = { '哥哥 Tom': 1.08, '陳老師': 1.0, '爺爺': 0.85, '小朋友 Ben': 1.18 };   // 爺爺放慢變低沉、小朋友加快變高
+let spToken = 0, spEl = null, spUnlocked = false;
+function clipFor(p) { return p.lang === 'zh' && p.who && p.who.sex === 'm' && window.ZHM && window.ZHM[p.t] !== undefined ? window.ZHM[p.t] : null; }
+function stopClips() { spToken++; try { if (spEl) { spEl.onended = spEl.onerror = null; spEl.pause(); } } catch (_) {} }
+function unlockAudio() {   // iOS：要在按下去的那一下先讓音訊元件「開過一次」，之後才能自己接著播
+  try {
+    if (!spEl) spEl = new Audio();
+    if (spUnlocked) return;
+    const b = new Uint8Array(46); const dv = new DataView(b.buffer);
+    [[0, 'RIFF'], [8, 'WAVE'], [12, 'fmt '], [36, 'data']].forEach(([o, t]) => [...t].forEach((c, k) => b[o + k] = c.charCodeAt(0)));
+    dv.setUint32(4, 38, true); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, 8000, true); dv.setUint32(28, 8000, true); dv.setUint16(32, 1, true); dv.setUint16(34, 8, true); dv.setUint32(40, 2, true); b[44] = 128; b[45] = 128;
+    spEl.src = URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+    spEl.play().then(() => { spUnlocked = true; }).catch(() => {});
+  } catch (_) {}
+}
+function ttsOne(p) {
+  const u = new SpeechSynthesisUtterance(p.t);
+  if (p.lang === 'zh') {
+    const z = zhVoiceFor(p.who ? p.who.sex : 'f');   // 沒有錄音時：男角色用中文男聲；找不到就用現有的聲音再把音高壓低
+    u.lang = 'zh-TW'; u.rate = p.who ? Math.min(1, p.who.rate + .12) : .9;
+    if (z.v) { u.voice = z.v; u.lang = z.v.lang; }
+    if (p.who) u.pitch = z.real ? Math.min(1.6, Math.max(.75, p.who.pitch)) : p.who.pitch;
+  } else {
+    u.lang = 'en-US'; u.rate = p.who ? p.who.rate : .85;
+    const v = p.who && voiceFor(p.who.sex); if (v) { u.voice = v; u.lang = v.lang; }
+    if (p.who) u.pitch = p.who.pitch;
+  }
+  return u;
+}
 function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
   try {
+    stopClips();
     if (spoke) speechSynthesis.cancel();
     spoke = true;
-    parts.forEach(p => {
-      if (!p.t) return;
-      const u = new SpeechSynthesisUtterance(p.t);
-      if (p.lang === 'zh') {
-        const z = zhVoiceFor(p.who ? p.who.sex : 'f');   // 男角色用中文男聲；找不到男聲就用現有的聲音再把音高壓低
-        u.lang = 'zh-TW'; u.rate = p.who ? Math.min(1, p.who.rate + .12) : .9;
-        if (z.v) { u.voice = z.v; u.lang = z.v.lang; }
-        if (p.who) u.pitch = z.real ? Math.min(1.6, Math.max(.75, p.who.pitch)) : p.who.pitch;
-      }
-      else {
-        u.lang = 'en-US'; u.rate = p.who ? p.who.rate : .85;
-        const v = p.who && voiceFor(p.who.sex); if (v) { u.voice = v; u.lang = v.lang; }
-        if (p.who) u.pitch = p.who.pitch;
-      }
-      speechSynthesis.speak(u);
-    });
+    parts = parts.filter(p => p.t);
+    if (!parts.some(clipFor)) { parts.forEach(p => speechSynthesis.speak(ttsOne(p))); return; }   // 沒有錄音：照原本一次排進佇列
+    unlockAudio();
+    const my = spToken; let k = 0;
+    const next = () => {
+      if (my !== spToken) return;
+      const p = parts[k++]; if (!p) return;
+      let done = false; const fin = () => { if (done) return; done = true; clearTimeout(wd); next(); };
+      const id = clipFor(p);
+      const viaTts = () => { if (done) return; clearTimeout(wd); const u = ttsOne(p); u.onend = u.onerror = fin; wd = setTimeout(fin, 2500 + p.t.length * 450); speechSynthesis.speak(u); };
+      let wd = setTimeout(fin, 2500 + p.t.length * 450);
+      if (!id) { clearTimeout(wd); viaTts(); return; }
+      try {
+        spEl.onended = fin; spEl.onerror = viaTts;
+        spEl.src = 'zhm/' + id + '.mp3';
+        const r = CLIP_RATE[p.who.name] || 1;
+        spEl.defaultPlaybackRate = r; spEl.preservesPitch = false; spEl.webkitPreservesPitch = false; spEl.playbackRate = r;
+        const pr = spEl.play(); if (pr && pr.catch) pr.catch(viaTts);
+      } catch (_) { viaTts(); }
+    };
+    next();
   } catch (_) {}
 }
 
