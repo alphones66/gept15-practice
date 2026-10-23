@@ -75,6 +75,17 @@ main { max-width:640px; margin:0 auto; padding:14px; }
 table { width:100%; border-collapse:collapse; font-size:16px; }
 th,td { text-align:left; padding:7px 4px; border-top:1px solid #f0e0d2; }
 select { font-size:17px; padding:6px; border-radius:8px; }
+.who { font-size:15px; color:#8a6a50; margin:6px 0 2px; }
+.ex + .ex { margin-top:8px; }
+.sline { display:flex; flex-wrap:wrap; gap:8px; min-height:58px; padding:10px; border:2px dashed #f1d9bf; border-radius:14px; margin:10px 0; align-content:flex-start; }
+.stile { border:2px solid var(--orange); background:#fff; border-radius:12px; padding:8px 12px; font-size:20px; }
+.stile.put { background:#ffe8cc; }
+.stile.good { background:#e8f5e9; border-color:#66bb6a; }
+.stile.bad { background:#fff3cd; border-color:#ffca28; }
+.bank { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:10px 0; }
+.bank .stile:disabled { opacity:.2; }
+.mk { width:100%; padding:12px; border:2px solid #f1d9bf; border-radius:12px; font-size:20px; }
+.mkhint { margin-top:8px; padding:10px 12px; background:#fff9ed; border-radius:12px; font-size:16px; line-height:1.6; }
 </style>
 </head>
 <body>
@@ -108,6 +119,7 @@ function writeWordUrl(word, day, index) {
   url.searchParams.set('i', index);
   return url.href;
 }
+const $ = id => document.getElementById(id);
 const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const pad = n => String(n).padStart(2, '0');
@@ -216,6 +228,16 @@ function home() {
       ${step('test', '③ 測驗', p.test != null ? `上次 ${p.test} 分（共 ${ws0.length} 題）` : `${ws0.length} 題，做完就完成今天`, 'test')}
     </section>
     <section class="box">
+      <h2>④ 例句練習（多練習）</h2>
+      <div class="hint">每個句子由不同的人說：男生、女生、老人、小孩。</div>
+      <button class="big green" data-act="sent" data-mode="mix">🎲 例句綜合練習<small>${ws0.length} 題，四種題型輪流出</small></button>
+      <button class="big alt" data-act="sent" data-mode="order">🧩 例句重組<small>看中文，把單字排成句子</small></button>
+      <button class="big alt" data-act="sent" data-mode="listen">🎧 聽句重組<small>聽句子，把單字排出來</small></button>
+      <button class="big alt" data-act="sent" data-mode="qzh">🎧 聽問題，排出中文翻譯<small>聽英文問題，把中文意思排出來</small></button>
+      <button class="big alt" data-act="sent" data-mode="dialog">💬 聽問題，排出回答<small>聽英文問題，把英文回答排出來</small></button>
+      <button class="big alt" data-act="sent" data-mode="make">✏️ 造句<small>用今天的字自己寫一句</small></button>
+    </section>
+    <section class="box">
       <h2>複習</h2>
       <div class="hint">${due.length ? `有 ${due.length} 個字該複習了，每次複習 ${Math.min(PER, due.length)} 題。` : '現在沒有要複習的字 👍'}</div>
       <button class="big blue" data-act="review" ${due.length ? '' : 'disabled'}>🔁 複習（${Math.min(PER, due.length)} 題）</button>
@@ -240,7 +262,10 @@ function card() {
       <div><span class="pos">${esc(x.pos)}</span>${inBook(x.w) ? ' <span class="pos" style="background:#e3f2fd;color:#1565c0">📘 課本有出現</span>' : ''}</div>
       <div class="zh">${esc(x.zh)}</div>
       <button class="say" data-full="${esc(x.w)}">🔊 聽發音和意思</button>
-      ${ex ? `<div class="ex">${esc(ex[0])}<small>${esc(ex[1])}</small><button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-say="${esc(ex[0])}">🔊 聽例句</button></div>` : ''}
+      ${ex ? `<div class="ex"><div class="who">${personOf(x.w).icon} ${esc(personOf(x.w).name)} 說：</div>${esc(ex[0])}<small>${esc(ex[1])}</small><button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exfull="${esc(x.w)}">🔊 聽例句＋中文</button></div>
+      <div class="ex"><div class="who">問　${personOf(x.w).icon} ${esc(personOf(x.w).name)}</div>${esc(ex[2])}<small>${esc(ex[3])}</small>
+        <div class="who">答　${answererOf(x.w).icon} ${esc(answererOf(x.w).name)}</div>${esc(ex[4])}<small>${esc(ex[5])}</small>
+        <button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exqa="${esc(x.w)}">🔊 聽問答</button></div>` : ''}
     </section>
     <a class="big blue" style="text-align:center;text-decoration:none" href="${writeWordUrl(x.w, c.day, c.i)}">✍️ 寫寫看這個字<small>看、描、自己寫，寫好會回到這裡</small></a>
     <div class="nav">
@@ -417,8 +442,8 @@ function records() {
     <button class="big green" data-act="home" style="text-align:center">回首頁</button>`;
 }
 function csvPractice() {
-  const rows = [['單字', '中文', '看過次數', '寫字次數', '答對', '答錯', '複習等級', '下次複習', '最後練習']];
-  Object.entries(prac.data.words).forEach(([w, s]) => rows.push([w, WMAP.get(w)?.short, s.seen, s.written || 0, s.right, s.wrong, s.box, s.due, s.last]));
+  const rows = [['單字', '中文', '看過次數', '寫字次數', '答對', '答錯', '例句答對', '例句答錯', '複習等級', '下次複習', '最後練習']];
+  Object.entries(prac.data.words).forEach(([w, s]) => rows.push([w, WMAP.get(w)?.short, s.seen, s.written || 0, s.right, s.wrong, s.sentRight || 0, s.sentWrong || 0, s.box, s.due, s.last]));
   download('gept15-練習記錄-' + today() + '.csv', csv(rows));
 }
 function csvQuiz() {
@@ -428,8 +453,189 @@ function csvQuiz() {
   download('gept15-測驗記錄-' + today() + '.csv', csv(rows));
 }
 
+// ---------- 說話的人：男生、女生、老人、小孩（跟英文寫字的問答同一組）----------
+const PEOPLE = [
+  { icon: '👦', name: '哥哥 Tom', sex: 'm', pitch: 1.35, rate: 0.8 },
+  { icon: '👧', name: '妹妹 Amy', sex: 'f', pitch: 1.6, rate: 0.8 },
+  { icon: '👨‍🏫', name: '陳老師', sex: 'm', pitch: 0.95, rate: 0.75 },
+  { icon: '👩', name: '媽媽', sex: 'f', pitch: 1.1, rate: 0.75 },
+  { icon: '👴', name: '爺爺', sex: 'm', pitch: 0.6, rate: 0.65 },
+  { icon: '👵', name: '奶奶', sex: 'f', pitch: 0.85, rate: 0.65 },
+  { icon: '🧒', name: '小朋友 Ben', sex: 'm', pitch: 1.8, rate: 0.85 },
+];
+const FEMALE = /samantha|karen|moira|tessa|victoria|allison|ava|susan|zira|serena|fiona|nicky|kate|jenny|aria|emma|joanna|salli|kimberly|ivy|female/i;
+const MALE = /daniel|fred|alex|aaron|arthur|gordon|rishi|tom\b|david|mark|guy|male|ryan|oliver|matthew|justin|joey|eddy|reed|rocko/i;
+function voiceFor(sex) {
+  const list = enVoices.filter(v => (sex === 'm' ? MALE : FEMALE).test(v.name) && !(sex === 'm' ? FEMALE : MALE).test(v.name));
+  return list.find(v => /en-US/i.test(v.lang)) || list[0] || null;
+}
+const personIdx = w => [...w].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % PEOPLE.length;
+const personOf = w => PEOPLE[personIdx(w)];
+const PAIR = [1, 4, 6, 0, 6, 1, 3];   // 問的人配固定的回答的人，聲音差很多
+const answererOf = w => PEOPLE[PAIR[personIdx(w)]];
+function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
+  try {
+    if (spoke) speechSynthesis.cancel();
+    spoke = true;
+    const zv = speechSynthesis.getVoices().find(v => /zh[-_]TW/i.test(v.lang)) || speechSynthesis.getVoices().find(v => /^zh/i.test(v.lang));
+    parts.forEach(p => {
+      if (!p.t) return;
+      const u = new SpeechSynthesisUtterance(p.t);
+      if (p.lang === 'zh') { u.lang = 'zh-TW'; u.rate = .9; if (zv) { u.voice = zv; u.lang = zv.lang; } }
+      else {
+        u.lang = 'en-US'; u.rate = p.who ? p.who.rate : .85;
+        const v = p.who && voiceFor(p.who.sex); if (v) { u.voice = v; u.lang = v.lang; }
+        if (p.who) u.pitch = p.who.pitch;
+      }
+      speechSynthesis.speak(u);
+    });
+  } catch (_) {}
+}
+
+// ---------- 例句練習：例句重組、聽句重組、問答排序、造句 ----------
+const SMODES = { mix: '例句綜合', order: '例句重組', listen: '聽句重組', qzh: '聽問題排中文', dialog: '聽問題排回答', make: '造句' };
+let SP = null;
+const toks = t => t.trim().split(/\s+/);
+// 中文一個字一塊（標點跟在前一個字後面）
+const zhToks = t => { const out = []; for (const ch of Array.from(t.trim())) { if (out.length && /[，。？！、：；「」『』（）,.?!:;"'…]/.test(ch)) out[out.length - 1] += ch; else out.push(ch); } return out; };
+function startSent(mode, day, words) {
+  const types = mode === 'mix' ? ['order', 'listen', 'qzh', 'dialog', 'make'] : [mode];
+  const list = shuffle(words.filter(x => EX[x.w])).map((x, i) => ({ w: x.w, type: types[i % types.length] }));
+  if (!list.length) return alert('這些字還沒有例句');
+  SP = { mode, day, list, i: 0, items: [] };
+  sentQ();
+}
+function sentQ() {
+  const q = SP.list[SP.i], x = WMAP.get(q.w), ex = EX[q.w], me = personOf(q.w), ans = answererOf(q.w);
+  SP.answered = false; SP.tries = 0; SP.got = [];
+  const head = `<div class="qnum">${SMODES[SP.mode]}・第 ${SP.i + 1} 題 / 共 ${SP.list.length} 題</div><div class="prog"><div style="width:${SP.i / SP.list.length * 100}%"></div></div>`;
+  let body;
+  if (q.type === 'make') {
+    SP.target = ex[0];
+    body = `<div class="qtext"><span class="emo">${PIC[x.w] || ''}</span><span class="w">${esc(x.w)}</span>${esc(x.short)}</div>
+      <div class="hint" style="text-align:center">用「${esc(x.w)}」寫一個英文句子（至少 3 個字，開頭大寫，最後加句點）</div>
+      <input class="mk" id="mk" type="text" autocapitalize="sentences" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="例如：${esc(ex[0].split(/\s+/).slice(0, 2).join(' '))} …">
+      <div class="mkhint" id="mkhint" hidden></div>
+      <div class="btns"><button type="button" data-act="mkshow">看範例</button><button type="button" class="ok" data-act="mkcheck">檢查</button></div>`;
+  } else {
+    const isZh = q.type === 'qzh';
+    SP.toks = isZh ? zhToks(ex[3]) : toks(q.type === 'dialog' ? ex[4] : ex[0]);
+    SP.sep = isZh ? '' : ' ';
+    SP.target = SP.toks.join(SP.sep);
+    SP.bank = shuffle(SP.toks.map((t, k) => ({ id: k, t })));
+    // 先只聽，不給文字；想看再按「看問題文字」
+    const qBlock = extra => `<div class="who">問　${me.icon} ${esc(me.name)}</div>
+      <div class="say2"><button class="say" data-sspeak="q" style="font-size:26px;padding:14px 24px">🔊 聽問題</button></div>
+      <div class="hint" style="text-align:center"><button class="mini" data-act="qshow">👀 看問題文字</button></div>
+      <div class="qtext" id="qtxt" hidden style="margin:6px 0 4px">${esc(ex[2])}${q.type === 'dialog' ? `<div class="hint">${esc(ex[3])}</div>` : ''}</div>
+      <div class="hint" style="text-align:center">${extra}</div>`;
+    const promptHtml = q.type === 'qzh'
+      ? qBlock('聽問題，把「中文意思」排出來。')
+      : q.type === 'dialog'
+      ? qBlock(`${ans.icon} ${esc(ans.name)} 要回答。把英文回答排出來。`)
+      : q.type === 'order'
+      ? `<div class="qtext">${esc(ex[1])}</div><div class="hint" style="text-align:center">${me.icon} ${esc(me.name)} 說的。把單字排成英文句子。</div>`
+      : q.type === 'listen'
+        ? `<div class="qtext">聽一聽，排出句子</div><div class="say2"><button class="say" data-sspeak="1" style="font-size:30px;padding:16px 28px">🔊 ${me.icon}</button></div>`
+        : '';
+    body = `${promptHtml}
+      <div class="sline" id="sline"></div>
+      <div class="bank" id="sbank"></div>
+      <div class="row" style="justify-content:center"><button class="mini" data-act="sundo">⌫ 刪掉一個</button><button class="mini" data-act="sclear">重來</button>${q.type === 'order' ? '<button class="mini" data-sspeak="1">🔊 聽句子</button>' : ''}</div>`;
+  }
+  $app.innerHTML = `<section class="box">${head}${body}<div class="fb" id="fb"></div><div id="next"></div></section><button class="mini" data-act="squit">先離開</button>`;
+  if (q.type !== 'make') drawSent();
+  if (q.type === 'listen') setTimeout(() => sentSpeak('1'), 300);
+  if (q.type === 'dialog' || q.type === 'qzh') setTimeout(() => sentSpeak('q'), 300);
+}
+function sentSpeak(which) {
+  if (!SP) return;
+  const q = SP.list[SP.i], ex = EX[q.w], me = personOf(q.w), ans = answererOf(q.w);
+  if (which === 'q' || q.type === 'qzh') speakParts([{ t: ex[2], lang: 'en', who: me }]);
+  else if (q.type === 'dialog') speakParts([{ t: ex[4], lang: 'en', who: ans }]);
+  else speakParts([{ t: ex[0], lang: 'en', who: me }]);
+}
+function drawSent() {
+  const got = SP.got, bank = SP.bank;
+  $('sline').innerHTML = got.map(id => `<button class="stile put" data-sgot="${id}">${esc(bank.find(b => b.id === id).t)}</button>`).join('');
+  $('sbank').innerHTML = bank.map(b => `<button class="stile" data-sbank="${b.id}" ${got.includes(b.id) ? 'disabled' : ''}>${esc(b.t)}</button>`).join('');
+}
+function sentFinish(ok, given) {   // 這一題結束：記錄、唸出正確的句子
+  const q = SP.list[SP.i], ex = EX[q.w], me = personOf(q.w), ans = answererOf(q.w);
+  SP.answered = true;
+  SP.items.push({ w: q.w, type: q.type, ok, ans: given });
+  const st = ws(q.w); st.last = today(); if (ok) st.sentRight = (st.sentRight || 0) + 1; else st.sentWrong = (st.sentWrong || 0) + 1;
+  const isZh = q.type === 'qzh', zhLine = isZh ? ex[2] : q.type === 'dialog' ? ex[5] : ex[1];
+  if (q.type === 'dialog' || isZh) { const t = $('qtxt'); if (t) t.hidden = false; }   // 做完就把問題文字顯示出來
+  $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 太棒了！</span>' : '<span style="color:#b26a00">看看正確的答案：</span>') + `<div style="font-size:21px;margin-top:6px"><b>${esc(SP.target)}</b></div><div class="hint">${esc(zhLine)}</div>`;
+  speakParts(isZh ? [{ t: ex[2], lang: 'en', who: me }, { t: ex[3], lang: 'zh' }] : [{ t: SP.target, lang: 'en', who: q.type === 'dialog' ? ans : me }, { t: zhLine, lang: 'zh' }]);
+  const last = SP.i >= SP.list.length - 1;
+  $('next').innerHTML = `<button class="big ${last ? 'green' : ''}" data-act="snext" style="text-align:center">${last ? '做完了 ✔' : '下一題 ▶'}</button>`;
+  prac.save();
+}
+function sentCheckBuilt() {
+  const bank = SP.bank, got = SP.got;
+  if (got.length < bank.length) return;
+  const mine = got.map(id => bank.find(b => b.id === id).t), ok = mine.join(SP.sep) === SP.target;
+  if (ok) { document.querySelectorAll('#sline .stile').forEach(b => b.classList.add('good')); sentFinish(SP.tries === 0, mine.join(SP.sep)); return; }
+  SP.tries++;
+  document.querySelectorAll('#sline .stile').forEach(b => b.classList.add('bad'));
+  if (SP.tries >= 2) { SP.got = []; const left = bank.slice(); SP.toks.forEach(t => { const k = left.findIndex(b => b.t === t); SP.got.push(left.splice(k, 1)[0].id); }); drawSent(); document.querySelectorAll('#sline .stile').forEach(b => b.classList.add('good')); sentFinish(false, mine.join(SP.sep)); return; }
+  $('fb').innerHTML = '<span style="color:#b26a00">差一點點，再排一次</span>';
+  setTimeout(() => { if (SP && !SP.answered) { SP.got = []; drawSent(); $('fb').textContent = ''; } }, 1100);
+}
+function sentFinishMake(ok, text) {
+  const q = SP.list[SP.i], ex = EX[q.w], me = personOf(q.w);
+  SP.answered = true;
+  SP.items.push({ w: q.w, type: 'make', ok, ans: text.trim() });
+  const st = ws(q.w); st.last = today(); if (ok) st.sentRight = (st.sentRight || 0) + 1; else st.sentWrong = (st.sentWrong || 0) + 1;
+  $('mkhint').hidden = true; $('mk').disabled = true;
+  $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 句子寫得很好！</span>' : '<span style="color:#b26a00">看看範例：</span>') + `<div style="font-size:21px;margin-top:6px"><b>${esc(ex[0])}</b></div><div class="hint">${esc(ex[1])}</div>`;
+  speakParts([{ t: ok ? text.trim() : ex[0], lang: 'en', who: me }, ...(ok ? [] : [{ t: ex[1], lang: 'zh' }])]);
+  const last = SP.i >= SP.list.length - 1;
+  $('next').innerHTML = `<button class="big ${last ? 'green' : ''}" data-act="snext" style="text-align:center">${last ? '做完了 ✔' : '下一題 ▶'}</button>`;
+  prac.save();
+}
+function mkProblems(text, word) {
+  const t = text.trim(), tk = t.split(/\s+/).filter(Boolean), low = t.toLowerCase().replace(/[^a-z' -]/g, ' '), w = word.toLowerCase(), probs = [];
+  const base = w.includes(' ') ? w : w.slice(0, Math.max(2, w.length - 1));
+  const has = w.includes(' ') ? low.includes(w) : low.split(/\s+/).some(x => x.startsWith(base));
+  if (!has) probs.push(`句子裡要用到「${word}」`);
+  if (tk.length < 3) probs.push('至少寫 3 個字');
+  if (t && !/^[A-Z]/.test(t)) probs.push('第一個字母要大寫');
+  if (t && !/[.!?]$/.test(t)) probs.push('最後要加句點（.）或問號（?）');
+  return probs;
+}
+function sentDone() {
+  hush();
+  const right = SP.items.filter(i => i.ok).length, total = SP.items.length;
+  const wrongs = [...new Set(SP.items.filter(i => !i.ok).map(i => i.w))];
+  prac.data.sessions.push({ t: new Date().toISOString(), day: SP.day, kind: 'sentence', mode: SP.mode, n: total, right });
+  prac.data.sessions = prac.data.sessions.slice(-1500);
+  prac.save();
+  const pct = right / total;
+  $app.innerHTML = `
+    <section class="box">
+      <div class="msg">${pct >= .9 ? '🌟' : pct >= .6 ? '👍' : '💪'} ${SMODES[SP.mode]}完成！</div>
+      <div class="score">${right} / ${total}</div>
+      <div class="msg">${pct >= .9 ? '太棒了！' : pct >= .6 ? '很好！' : '有進步！再多練幾次就會了'}</div>
+      ${wrongs.length ? `<div class="hint">再多聽幾次這些字的句子：</div><div class="chips">${wrongs.map(w => `<span class="again">${esc(w)}</span>`).join('')}</div>` : '<div class="hint" style="text-align:center">全部答對 🎉</div>'}
+    </section>
+    <button class="big green" data-act="home" style="text-align:center">回首頁</button>`;
+  SP = null;
+}
+
 // ---------- 事件 ----------
 $app.addEventListener('click', e => {
+  const ef = e.target.closest('[data-exfull]');
+  if (ef) { const w = ef.dataset.exfull, ex = EX[w]; if (ex) speakParts([{ t: ex[0], lang: 'en', who: personOf(w) }, { t: ex[1], lang: 'zh' }]); return; }
+  const eq = e.target.closest('[data-exqa]');
+  if (eq) { const w = eq.dataset.exqa, ex = EX[w]; if (ex) speakParts([{ t: ex[2], lang: 'en', who: personOf(w) }, { t: ex[4], lang: 'en', who: answererOf(w) }]); return; }
+  const ss = e.target.closest('[data-sspeak]'); if (ss && SP) { sentSpeak(ss.dataset.sspeak); return; }
+  const sb2 = e.target.closest('[data-sbank]');
+  if (sb2 && SP && !SP.answered) { SP.got.push(+sb2.dataset.sbank); drawSent(); sentCheckBuilt(); return; }
+  const sg = e.target.closest('[data-sgot]');
+  if (sg && SP && !SP.answered) { SP.got = SP.got.filter(id => id !== +sg.dataset.sgot); drawSent(); return; }
   const fb = e.target.closest('[data-full]'); if (fb) { speakFull(WMAP.get(fb.dataset.full)); return; }
   const sb = e.target.closest('[data-say]'); if (sb) { speak(sb.dataset.say); return; }
   const ob = e.target.closest('[data-opt]'); if (ob && S && !S.answered) { answer(ob.dataset.opt === S.queue[S.i].w, ob.dataset.opt); return; }
@@ -442,6 +648,22 @@ $app.addEventListener('click', e => {
     case 'cprev': cardS.i--; card(); break;
     case 'cnext': cardS.i++; card(); break;
     case 'cdone': cardsDone(); break;
+    case 'sent': startSent(a.dataset.mode, getView(), dayWords(getView())); break;
+    case 'snext': SP.i++; SP.i < SP.list.length ? sentQ() : sentDone(); break;
+    case 'squit': if (confirm('先離開？這一次不會記錄喔')) { SP = null; hush(); home(); } break;
+    case 'qshow': { const t = $('qtxt'); if (t) t.hidden = false; break; }
+    case 'sundo': if (SP && !SP.answered) { SP.got.pop(); drawSent(); } break;
+    case 'sclear': if (SP && !SP.answered) { SP.got = []; drawSent(); } break;
+    case 'mkcheck': {
+      if (!SP || SP.answered) break;
+      const q = SP.list[SP.i], text = $('mk').value, probs = mkProblems(text, q.w), h = $('mkhint');
+      if (!probs.length) { sentFinishMake(true, text); break; }
+      SP.tries++;
+      h.hidden = false; h.innerHTML = '再改一下：<br>' + probs.map(p => '・' + esc(p)).join('<br>');
+      if (SP.tries >= 3) sentFinishMake(false, text);
+      break;
+    }
+    case 'mkshow': if (SP && !SP.answered) sentFinishMake(false, $('mk').value); break;
     case 'practice': startSession('practice', getView(), dayWords(getView())); break;
     case 'test': startSession('test', getView(), dayWords(getView())); break;
     case 'review': startSession('review', 0, shuffle(dueWords().slice(0, 40)).slice(0, PER)); break;
