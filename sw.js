@@ -1,4 +1,4 @@
-const CACHE = 'gept15-practice-v15';
+const CACHE = 'gept15-practice-v16';
 const FILES = [
   './',
   'index.html',
@@ -32,7 +32,7 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    fetch(event.request).then(response => {
+    fetch(event.request, { cache: 'no-cache' }).then(response => {   // 每次都向伺服器確認有沒有新版
       if (response.ok) {
         const copy = response.clone();
         caches.open(CACHE).then(cache => cache.put(event.request, copy));

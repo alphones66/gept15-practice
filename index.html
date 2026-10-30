@@ -46,6 +46,9 @@ main { max-width:640px; margin:0 auto; padding:14px; }
 .card .zh { font-size:28px; margin:8px 0; }
 .card .ex { text-align:left; background:#fdf1e6; border-radius:12px; padding:12px; margin-top:10px; font-size:18px; line-height:1.6; }
 .card .ex small { color:#8a6a50; display:block; }
+.kar .kw { border-radius:5px; padding:0 1px; transition:color .12s, background .12s; }
+.kar .kw.done { color:#e0561a; }
+.kar .kw.now { color:#fff; background:#f06a1f; }
 .say { border:0; background:var(--blue); color:#fff; border-radius:14px; font-size:20px; padding:10px 18px; margin:4px; }
 .nav { display:flex; gap:10px; }
 .nav button { flex:1; }
@@ -103,7 +106,7 @@ select { font-size:17px; padding:6px; border-radius:8px; }
 <script src="zhm-index.js"></script>
 <script>
 'use strict';
-const APP_VER = 'v2026.10.26-1';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
+const APP_VER = 'v2026.10.30-1';   // 每次修改都要換版號，畫面上看得到，才知道 iPad 載入的是不是新版
 document.getElementById('ver').textContent = APP_VER;
 const PER = 15;                                                    // 每天新學幾個字
 const ALPHA = (window.GEPT_ELEMENTARY || []).map(([w, pos, zh]) => ({ w, pos, zh, short: zh.split(/[；、]/)[0] }));
@@ -306,9 +309,9 @@ function card() {
       <div class="zh">${esc(x.zh)}</div>
       <button class="say" data-full="${esc(x.w)}">🔊 聽發音和意思</button>
       ${zhNoMale() ? `<div class="hint" style="margin:6px 0">ⓘ 這台裝置沒有中文男聲，爺爺、哥哥、老師的中文翻譯只能用比較低的聲音。想要真的男聲：設定 → 輔助使用 → 朗讀內容 → 聲音 → 中文，下載男聲（例如 Li-mu）。目前有的中文聲音：${esc(zhVoices().map(v => v.name + '（' + (v.voiceURI || '').split('.').pop() + '）').join('、'))}</div>` : ''}
-      ${ex ? `<div class="ex"><div class="pic">${sentEmoji(ex[0])}</div><div class="who">${personOf(x.w).icon} ${esc(personOf(x.w).name)} 說：</div>${esc(ex[0])}<button class="say sm" data-exline="e:${esc(x.w)}" aria-label="聽這句">🔊</button><small>${esc(ex[1])}</small><button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exfull="${esc(x.w)}">🔊 聽例句＋中文</button></div>
-      <div class="ex"><div class="pic">${dialogPic(x.w)}</div><div class="who">問　${personOf(x.w).icon} ${esc(personOf(x.w).name)}</div>${esc(ex[2])}<button class="say sm" data-exline="q:${esc(x.w)}" aria-label="聽問題">🔊</button><small>${esc(ex[3])}</small>
-        <div class="who">答　${answererOf(x.w).icon} ${esc(answererOf(x.w).name)}</div>${esc(ex[4])}<button class="say sm" data-exline="a:${esc(x.w)}" aria-label="聽回答">🔊</button><small>${esc(ex[5])}</small>
+      ${ex ? `<div class="ex"><div class="pic">${sentEmoji(ex[0])}</div><div class="who">${personOf(x.w).icon} ${esc(personOf(x.w).name)} 說：</div>${kar(ex[0])}<button class="say sm" data-exline="e:${esc(x.w)}" aria-label="聽這句">🔊</button><small>${kar(ex[1])}</small><button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exfull="${esc(x.w)}">🔊 聽例句＋中文</button></div>
+      <div class="ex"><div class="pic">${dialogPic(x.w)}</div><div class="who">問　${personOf(x.w).icon} ${esc(personOf(x.w).name)}</div>${kar(ex[2])}<button class="say sm" data-exline="q:${esc(x.w)}" aria-label="聽問題">🔊</button><small>${kar(ex[3])}</small>
+        <div class="who">答　${answererOf(x.w).icon} ${esc(answererOf(x.w).name)}</div>${kar(ex[4])}<button class="say sm" data-exline="a:${esc(x.w)}" aria-label="聽回答">🔊</button><small>${kar(ex[5])}</small>
         <button class="say" style="font-size:16px;padding:6px 12px;margin:8px 0 0" data-exqa="${esc(x.w)}">🔊 聽問答</button></div>` : ''}
     </section>
     <a class="big blue" style="text-align:center;text-decoration:none" href="${writeWordUrl(x.w, c.day, c.i)}">✍️ 寫寫看這個字<small>看、描、自己寫，寫好會回到這裡</small></a>
@@ -548,7 +551,7 @@ function linePart(w, which) {   // 某一句：英文用這個角色的聲音，
 const CLIP_RATE = { '哥哥 Tom': 1.08, '陳老師': 1.0, '爺爺': 0.85, '小朋友 Ben': 1.18 };   // 爺爺放慢變低沉、小朋友加快變高
 let spToken = 0, spEl = null, spUnlocked = false;
 function clipFor(p) { return p.lang === 'zh' && p.who && p.who.sex === 'm' && window.ZHM && window.ZHM[p.t] !== undefined ? window.ZHM[p.t] : null; }
-function stopClips() { spToken++; try { if (spEl) { spEl.onended = spEl.onerror = null; spEl.pause(); } } catch (_) {} }
+function stopClips() { karReset(); spToken++; try { if (spEl) { spEl.onended = spEl.onerror = null; spEl.pause(); } } catch (_) {} }
 function unlockAudio() {   // iOS：要在按下去的那一下先讓音訊元件「開過一次」，之後才能自己接著播
   try {
     if (!spEl) spEl = new Audio();
@@ -560,6 +563,51 @@ function unlockAudio() {   // iOS：要在按下去的那一下先讓音訊元�
     spEl.play().then(() => { spUnlocked = true; }).catch(() => {});
   } catch (_) {}
 }
+// ---------- 卡拉OK：唸的時候，句子像歌詞一樣一個字一個字變色（唸過的橘色，正在唸的橘底白字）----------
+const KAR_ZH = /[\u3400-\u9fff]/;
+function karUnits(t) {   // 切成要上色的單位：英文一個字、中文一個字（標點跟在前一個字後面）
+  t = t.trim();
+  if (KAR_ZH.test(t)) { const out = []; for (const ch of Array.from(t)) { if (out.length && /[，。？！、：；「」『』（）,.?!:;"'…\s]/.test(ch)) out[out.length - 1] += ch; else out.push(ch); } return out; }
+  return t.split(/\s+/);
+}
+const kar = t => `<span class="kar" data-kt="${esc(String(t).trim())}">${karUnits(String(t)).map(u => `<span class="kw">${esc(u)}</span>`).join(KAR_ZH.test(t) ? '' : ' ')}</span>`;
+function karOffsets(t) {   // 每個單位在整句裡的起點（跟語音回報的「唸到第幾個字元」對照）
+  t = t.trim(); let pos = 0;
+  return karUnits(t).map(u => { const i = t.indexOf(u, pos); const o = i < 0 ? pos : i; pos = o + u.length; return o; });
+}
+let karTick = null;
+const karFind = t => [...document.querySelectorAll('.kar')].filter(e => e.dataset.kt === String(t).trim());
+function karReset() { clearInterval(karTick); karTick = null; document.querySelectorAll('.kar .kw.now, .kar .kw.done').forEach(w => w.classList.remove('now', 'done')); }
+function karShow(els, n) { els.forEach(e => e.querySelectorAll('.kw').forEach((w, i) => { w.classList.toggle('done', i < n); w.classList.toggle('now', i === n); })); }
+function karSweep(els, ms) {   // 裝置沒有回報唸到哪裡時：照預估的時間平均掃過
+  clearInterval(karTick);
+  const t0 = performance.now(), n = els[0].querySelectorAll('.kw').length;
+  karTick = setInterval(() => { const f = (performance.now() - t0) / ms; karShow(els, Math.min(n, Math.floor(f * n))); if (f >= 1) clearInterval(karTick); }, 60);
+}
+function karTts(u, p) {   // 語音：優先用「唸到第幾個字」的回報，沒有回報就照時間掃
+  const els = karFind(p.t); if (!els.length) return;
+  const offs = karOffsets(p.t), L = p.t.trim().length;
+  const perChar = (KAR_ZH.test(p.t) ? .24 : .09) / Math.max(.5, u.rate || .85);
+  let gotBoundary = false;
+  u.addEventListener('start', () => { clearInterval(karTick); karShow(els, 0); setTimeout(() => { if (!gotBoundary && !u.__done) karSweep(els, L * perChar * 1000); }, 450); });
+  u.addEventListener('boundary', e => {
+    if (e.name && e.name !== 'word') return;
+    gotBoundary = true; clearInterval(karTick);
+    const ci = e.charIndex * (L / Math.max(1, u.text.length)); let idx = 0;
+    offs.forEach((o, i) => { if (o <= ci + .5) idx = i; });
+    karShow(els, idx);
+  });
+  const fin = () => { u.__done = true; clearInterval(karTick); karShow(els, 999); };
+  u.addEventListener('end', fin); u.addEventListener('error', fin);
+}
+function karClip(p) {   // 錄音：依播放進度掃過
+  const els = karFind(p.t); if (!els.length) return;
+  clearInterval(karTick);
+  const n = els[0].querySelectorAll('.kw').length; karShow(els, 0);
+  karTick = setInterval(() => { const d = spEl.duration, c = spEl.currentTime; if (d > 0 && isFinite(d)) karShow(els, Math.min(n, Math.floor(c / d * n))); }, 50);
+}
+function karClipEnd(p) { clearInterval(karTick); const els = karFind(p.t); if (els.length) karShow(els, 999); }
+
 function ttsOne(p) {
   const u = new SpeechSynthesisUtterance(p.lang === 'zh' ? p.t : fixEn(p.t));
   if (p.lang === 'zh') {
@@ -572,6 +620,7 @@ function ttsOne(p) {
     const v = p.who && voiceFor(p.who.sex); if (v) { u.voice = v; u.lang = v.lang; }
     if (p.who) u.pitch = p.who.pitch;
   }
+  karTts(u, p);
   return u;
 }
 function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
@@ -579,6 +628,7 @@ function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
     stopClips();
     if (spoke) speechSynthesis.cancel();
     spoke = true;
+    karReset();
     parts = parts.filter(p => p.t);
     if (!parts.some(clipFor)) { parts.forEach(p => speechSynthesis.speak(ttsOne(p))); return; }   // 沒有錄音：照原本一次排進佇列
     unlockAudio();
@@ -586,7 +636,7 @@ function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
     const next = () => {
       if (my !== spToken) return;
       const p = parts[k++]; if (!p) return;
-      let done = false; const fin = () => { if (done) return; done = true; clearTimeout(wd); next(); };
+      let done = false; const fin = () => { if (done) return; done = true; clearTimeout(wd); karClipEnd(p); next(); };
       const id = clipFor(p);
       const viaTts = () => { if (done) return; clearTimeout(wd); const u = ttsOne(p); u.onend = u.onerror = fin; wd = setTimeout(fin, 2500 + p.t.length * 450); speechSynthesis.speak(u); };
       let wd = setTimeout(fin, 2500 + p.t.length * 450);
@@ -597,6 +647,7 @@ function speakParts(parts) {   // [{t, lang:'en'|'zh', who}]：依序唸
         const r = CLIP_RATE[p.who.name] || 1;
         spEl.defaultPlaybackRate = r; spEl.preservesPitch = false; spEl.webkitPreservesPitch = false; spEl.playbackRate = r;
         const pr = spEl.play(); if (pr && pr.catch) pr.catch(viaTts);
+        karClip(p);
       } catch (_) { viaTts(); }
     };
     next();
@@ -710,7 +761,7 @@ function sentFinish(ok, given) {   // 這一題結束：記錄、唸出正確的
   const parts = isZh ? [{ t: ex[2], lang: 'en', who: me }, { t: ex[3], lang: 'zh', who: me }] : [{ t: SP.target, lang: 'en', who: q.type === 'dialog' ? ans : me }, { t: zhLine, lang: 'zh', who: q.type === 'dialog' ? ans : me }];
   SP.replay = parts;
   const picHtml = (q.type === 'dialog' || isZh) ? dialogPic(q.w) : sentEmoji(ex[0]);
-  $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 太棒了！</span>' : '<span style="color:#b26a00">看看正確的答案：</span>') + `<div class="pic">${picHtml}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(SP.target)}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(zhLine)}</div>`;
+  $('fb').innerHTML = (ok ? '<span style="color:#2e7d32">✔ 太棒了！</span>' : '<span style="color:#b26a00">看看正確的答案：</span>') + `<div class="pic">${picHtml}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${kar(SP.target)}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${kar(zhLine)}</div>`;
   speakParts(parts);
   const last = SP.i >= SP.list.length - 1;
   $('next').innerHTML = `<button class="big ${last ? 'green' : ''}" data-act="snext" style="text-align:center">${last ? '做完了 ✔' : '下一題 ▶'}</button>`;
@@ -752,8 +803,8 @@ function sentFinishMake(ok, text) {
   const st = ws(q.w); st.last = today(); if (ok) st.sentRight = (st.sentRight || 0) + 1; else st.sentWrong = (st.sentWrong || 0) + 1;
   $('mkhint').hidden = true; $('mkex').hidden = true; $('mkskip').hidden = true; $('mk').disabled = true;
   $('fb').innerHTML = ok
-    ? `<div style="font-size:34px;color:#2e7d32">🎉 好棒棒！</div><div class="pic">${sentEmoji(text)}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(text.trim())}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div>`
-    : `<span style="color:#b26a00">看看範例：</span><div class="pic">${sentEmoji(ex[0])}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${esc(ex[0])}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${esc(ex[1])}</div>`;
+    ? `<div style="font-size:34px;color:#2e7d32">🎉 好棒棒！</div><div class="pic">${sentEmoji(text)}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${kar(text.trim())}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div>`
+    : `<span style="color:#b26a00">看看範例：</span><div class="pic">${sentEmoji(ex[0])}</div><div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:6px"><span style="font-size:21px"><b>${kar(ex[0])}</b></span><button class="say" data-sreplay="1" aria-label="再聽一次" style="margin:0;padding:8px 14px;font-size:22px">🔊</button></div><div class="hint">${kar(ex[1])}</div>`;
   SP.replay = ok ? [{ t: text.trim(), lang: 'en', who: me }] : [{ t: ex[0], lang: 'en', who: me }, { t: ex[1], lang: 'zh', who: me }];
   speakParts(ok ? [{ t: '好棒棒！', lang: 'zh' }, ...SP.replay] : SP.replay);
   const last = SP.i >= SP.list.length - 1;
@@ -1009,7 +1060,7 @@ $app.addEventListener('click', e => {
       if (!SP || SP.answered) break;
       const q = SP.list[SP.i], ex = EX[q.w], e = $('mkex');
       e.hidden = false;
-      e.innerHTML = `${personOf(q.w).icon} ${esc(personOf(q.w).name)} 的範例：<br><b style="font-size:20px">${esc(ex[0])}</b><br>${esc(ex[1])}<br><span class="hint">看完範例，自己寫一個不一樣的句子，再按「檢查」。</span>`;
+      e.innerHTML = `${personOf(q.w).icon} ${esc(personOf(q.w).name)} 的範例：<br><b style="font-size:20px">${kar(ex[0])}</b><br>${kar(ex[1])}<br><span class="hint">看完範例，自己寫一個不一樣的句子，再按「檢查」。</span>`;
       speakParts(linePart(q.w, 'e'));
       $('mkskip').hidden = false;
       $('mk').focus();
